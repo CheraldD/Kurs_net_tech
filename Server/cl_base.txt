@@ -1,0 +1,5 @@
+login:password
+andrew:1234
+kolya:qwerty
+l:zxc1234
+user:P@ssW0rd
