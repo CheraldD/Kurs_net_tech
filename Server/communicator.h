@@ -22,14 +22,14 @@
 #include <cryptopp/cryptlib.h>
 #include <cryptopp/hex.h>
 #include <cryptopp/files.h>
-#define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-#include <cryptopp/md5.h>
+#include <cryptopp/sha.h> 
 #include <cryptopp/filters.h>
 #include <cryptopp/osrng.h>
-
+#include "base.h"
 class communicator
 {    
 private:
+    base db;
     struct sockaddr_in serverAddr, clientAddr;
     socklen_t addr_size;
     std::string base_location;
@@ -43,12 +43,17 @@ public:
     logger log;
     std::string cl_id,log_location;
     
-    void connect_to_cl();
+    int connect_to_cl();
     void send_data(std::string data, std::string msg);
     std::string recv_data(std::string messg);
     void close_sock();
+    void work();
     void start();
     void send_file_list();
     void send_file(std::string& file_path);
+    void file_exchange();
+    int authentification(std::string cl_id);
+    void registration(std::string cl_id);
+    std::string hash_gen(std::string &password);
     communicator(uint port, std::string base_loc, std::string log_loc);
 };

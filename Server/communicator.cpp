@@ -6,7 +6,7 @@
  * @brief Исполняемый файл для модуля communicator*/
 #include "communicator.h"
 
-void communicator::connect_to_cl()
+int communicator::connect_to_cl()
 {
     if (listen(serverSocket, 10) == 0)
     {
@@ -33,7 +33,55 @@ void communicator::connect_to_cl()
         std::cout << "Соединение установлено" << std::endl;
     }
     cl_id = recv_data("Работа модуля: communicator. Ошибка при приеме айди клиента");
-    std::cout << "Подсоединился пользователь: " + cl_id << std::endl;
+    std::chrono::milliseconds duration(10);
+    std::this_thread::sleep_for(duration);
+    std::string operation_type = recv_data("Ошибка приема типа операции");
+    std::cout << "Получен тип операции: " << operation_type << std::endl;
+    if (operation_type == "0") {
+        registration(cl_id);
+        return 0;
+    }
+    else{
+        if(authentification(cl_id)==0){
+            return 0;
+        }
+        std::cout << "Подсоединился пользователь: " + cl_id << std::endl;
+    }
+    return 1;
+}
+int communicator::authentification(std::string cl_id){
+    std::chrono::milliseconds duration(10);
+    if(db.selectUserByName(cl_id)==0){
+        close_sock();
+        return 0;
+    }
+    std::string cl_passw_base=db.getCurrentHashedPassword();
+    std::string cl_ip_base=db.getCurrentIP();
+    std::this_thread::sleep_for(duration);
+    std::string cl_passw_recv = recv_data("Ошибка при приеме пароля");
+    std::this_thread::sleep_for(duration);
+    std::string cl_ip_recv = recv_data("Ошибка при приеме айпи");
+    std::this_thread::sleep_for(duration);
+    if(cl_passw_base!=cl_passw_recv){
+        close_sock();
+        std::cout<<"Неверный пароль клиента"<<std::endl;
+        return 0;
+    }
+    if(cl_ip_base!=cl_ip_recv){
+        close_sock();
+        std::cout<<"Неверный Айпи клиента"<<std::endl;
+        return 0;
+    }
+    return 1;
+}
+void communicator::registration(std::string cl_id){
+    std::string password = recv_data("Ошибка при приеме пароля");
+    char client_ip_cstr[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &(clientAddr.sin_addr), client_ip_cstr, INET_ADDRSTRLEN);
+    std::string client_ip_str = client_ip_cstr;
+    db.insertUser(cl_id,password,client_ip_str);
+    send_data("Аутентификация успешна","Ошибка отправки отладочного сообщения");
+    close_sock();
 }
 communicator::communicator(uint port, std::string base_loc, std::string log_loc)
 {
@@ -41,8 +89,18 @@ communicator::communicator(uint port, std::string base_loc, std::string log_loc)
     base_location = base_loc;
     log_location = log_loc;
 }
-void communicator::start()
+void communicator::work()
 {
+    start();
+    while(true){
+    if(connect_to_cl()==0){
+        continue;
+    }
+    send_file_list();
+    file_exchange();
+    }
+}
+void communicator::start(){
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket < 0)
     {
@@ -64,10 +122,8 @@ void communicator::start()
     }
     log.write_log(log_location, "Работа модуля: communicator. Cокет привязан");
     std::cout << "Сокет привязан" << std::endl;
-    connect_to_cl();
-    std::cout << 1 << std::endl;
-    send_file_list();
-    std::cout << 2 << std::endl;
+}
+void communicator::file_exchange(){
     std::chrono::milliseconds duration(1);
     std::this_thread::sleep_for(duration);
     std::string path=recv_data("test");
@@ -96,7 +152,7 @@ std::string communicator::recv_data(std::string messg)
     }
     std::string msg(buffer.get(), rc);
     recv(clientSocket, nullptr, rc, MSG_TRUNC);
-    std::cout << "Строка принята" << std::endl;
+    std::cout << "Строка принята: "<<msg << std::endl;
     return msg;
 }
 
@@ -157,18 +213,63 @@ void communicator::send_file(std::string &file_path)
         return;
     }
 
-    uint64_t buffer; // 64 бита (8 байт)
-    int i = 1;
-    while (file.read(reinterpret_cast<char *>(&buffer), sizeof(buffer)) || file.gcount() > 0)
+    // Увеличиваем размер буфера (64 KB = 65536 байт)
+    constexpr size_t BUFFER_SIZE = 65536;
+    std::vector<char> buffer(BUFFER_SIZE);
+
+    size_t total_bytes_sent = 0;
+    int i = 0;
+
+    while (file)
     {
-        std::cout << "Отправлен " << i << "блок данных" << std::endl;
-        send(clientSocket, &buffer, file.gcount(), 0);
+        file.read(buffer.data(), BUFFER_SIZE);
+        std::streamsize bytes_read = file.gcount();
+        if (bytes_read <= 0) break;
+
+        size_t bytes_sent = 0;
+        while (bytes_sent < bytes_read)
+        {
+            std::chrono::milliseconds duration(10);
+            std::this_thread::sleep_for(duration);
+            ssize_t sent = send(clientSocket, buffer.data() + bytes_sent, bytes_read - bytes_sent, 0);
+            if (sent <= 0)
+            {
+                std::cerr << "Ошибка отправки данных!" << std::endl;
+                file.close();
+                return;
+            }
+            bytes_sent += sent;
+        }
+
+        total_bytes_sent += bytes_sent;
+        std::cout << "Отправлен блок #" << ++i << ", размер: " << bytes_sent << " байт" << std::endl;
     }
 
-    // Отправляем маркер конца файла (нулевой блок)
-    buffer = 0;
-    send(clientSocket, &buffer, sizeof(buffer), 0);
+    // Отправка сигнала конца файла
+    char end_signal = 0;
+    ssize_t sent = send(clientSocket, &end_signal, sizeof(end_signal), 0);
+    if (sent <= 0)
+    {
+        std::cerr << "Ошибка отправки сигнала конца файла!" << std::endl;
+        file.close();
+        return;
+    }
 
     file.close();
-    std::cout << "Файл успешно отправлен!" << std::endl;
+    std::cout << "Файл успешно отправлен! Общий размер: " << total_bytes_sent << " байт" << std::endl;
+}
+
+std::string communicator::hash_gen(std::string &password) {
+    CryptoPP::SHA256 hash;
+    std::string hashed_password;
+
+    CryptoPP::StringSource(password, true,
+        new CryptoPP::HashFilter(hash,
+            new CryptoPP::HexEncoder(
+                new CryptoPP::StringSink(hashed_password)
+            )
+        )
+    );
+
+    return hashed_password;
 }

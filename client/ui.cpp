@@ -14,6 +14,9 @@ UI::UI(int argc, char *argv[])
     desc.add_options()
     ("help,h", "Помощь\nВсе параметры ниже являются обязательными")
     ("serv_ip,s", po::value<std::vector<std::string>>()->multitoken(), "Айпи сервера")
+    ("operation, o",po::value<std::vector<uint>>()->multitoken(), "1 - аутентификация, 0 - регистрация")
+    ("username, u",po::value<std::vector<std::string>>()->multitoken(), "Имя пользователя")
+    ("password, pa",po::value<std::vector<std::string>>()->multitoken(), "Пароль пользователя")
     ("port,p", po::value<std::vector<uint>>()->multitoken(), "Порт сервера");
     //("in_file,i", po::value<std::vector<std::string>>()->multitoken(), "Файл с входными данными")
     //("out_file,o", po::value<std::vector<std::string>>()->multitoken(), "Файл с результатом")
@@ -27,6 +30,51 @@ UI::UI(int argc, char *argv[])
     }
 
     po::notify(vm);
+}
+std::string UI::get_password(){
+    if (vm.count("password") and !vm["password"].as<std::vector<std::string>>().empty())
+    {
+        const std::vector<std::string> &password = vm["password"].as<std::vector<std::string>>();
+        return password.back();
+    }
+    else
+    {
+        std::cout << desc << std::endl;
+        debugger.show_error_information("Ошибка в get_password()", "Неопределенное значение пароля", "Неопределенная ошибка");
+        return "";
+    }
+}
+std::string UI::get_username(){
+    if (vm.count("username") and !vm["username"].as<std::vector<std::string>>().empty())
+    {
+        const std::vector<std::string> &username = vm["username"].as<std::vector<std::string>>();
+        return username.back();
+    }
+    else
+    {
+        std::cout << desc << std::endl;
+        debugger.show_error_information("Ошибка в get_password()", "Неопределенное значение пароля", "Неопределенная ошибка");
+        return "";
+    }
+}
+uint UI::get_op(){
+    if (vm.count("operation") and !vm["operation"].as<std::vector<uint>>().empty())
+    {
+        const std::vector<uint> &op = vm["operation"].as<std::vector<uint>>();
+        if (op.back()>1 or op.back()<0)
+        {
+            std::cout << desc << std::endl;
+            debugger.show_error_information("Ошибка в get_op()", "Неверный номер операции", "Логическая ошибка");
+            return 2;
+        }
+        return op.back();
+    }
+    else
+    {
+        std::cout << desc << std::endl;
+        debugger.show_error_information("Ошибка в get_op()", "Неопределенное значение операции", "Неопределенная ошибка");
+        return 2;
+    }
 }
 uint UI::get_port()
 {
@@ -75,48 +123,7 @@ std::string UI::get_serv_ip()
         return "";
     }
 }
-/*std::string UI::get_in_file_location()
-{
-    if (vm.count("in_file") and !vm["in_file"].as<std::vector<std::string>>().empty())
-    {
-        const std::vector<std::string> &in_file_loc = vm["in_file"].as<std::vector<std::string>>();
-        return check_path(in_file_loc.back(), "Ошибка в get_in_file_location()");
-    }
-    else
-    {
-        std::cout << desc << std::endl;
-        debugger.show_error_information("Ошибка в get_in_file_location()", "Неопределенное значение пути", "Неопределенная ошибка");
-        return "";
-    }
-}
-std::string UI::get_out_file_location()
-{
-    if (vm.count("out_file") and !vm["out_file"].as<std::vector<std::string>>().empty())
-    {
-        const std::vector<std::string> &out_file_loc = vm["out_file"].as<std::vector<std::string>>();
-        return check_path(out_file_loc.back(), "Ошибка в get_out_file_location()");
-    }
-    else
-    {
-        std::cout << desc << std::endl;
-        debugger.show_error_information("Ошибка в get_out_file_location()", "Неопределенное значение пути", "Неопределенная ошибка");
-        return "";
-    }
-}
-std::string UI::get_user_data_location()
-{
-    if (vm.count("user_data") and !vm["user_data"].as<std::vector<std::string>>().empty())
-    {
-        const std::vector<std::string> &user_data_loc = vm["user_data"].as<std::vector<std::string>>();
-        return check_path(user_data_loc.back(), "Ошибка в get_user_data_location()");
-    }
-    else
-    {
-        std::cout << desc << std::endl;
-        debugger.show_error_information("Ошибка в get_user_data_location()", "Неопределенное значение пути", "Неопределенная ошибка");
-        return "";
-    }
-}
+
 std::string UI::check_path(std::string path, std::string function)
 {
     boost::filesystem::path filePath(path);
@@ -151,4 +158,4 @@ std::string UI::check_path(std::string path, std::string function)
         return "";
     }
     return boost::filesystem::absolute(filePath).string();
-}*/
+}

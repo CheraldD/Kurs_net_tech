@@ -8,22 +8,45 @@
 #include "client.h"
 void client::work(UI &intf)
 {
-    // user_data_location=intf.get_user_data_location();
     serv_ip = intf.get_serv_ip().c_str();
     port = intf.get_port();
+    op = intf.get_op();
+    password = intf.get_password();
+    id=intf.get_username();
     std::cout << "Начало работы клиента" << std::endl;
     start();
-    // read_user_data_file(user_data_location);
     connect_to_server();
+    std::chrono::milliseconds duration(10);
+    std::this_thread::sleep_for(duration);
+    send_data(std::to_string(op));
+    if (op==1){
+        client_auth();
+    }
+    else{
+        client_reg();
+    }
     files = recv_vector();
     print_vector(files);
-    std::chrono::milliseconds duration(1);
     std::this_thread::sleep_for(duration);
     std::string file_path = "data.txt";
     std::string path = "test.txt";
     send(sock, file_path.c_str(), file_path.length(), 0);
     recv_file(path);
-    // client_auth();
+    close_sock();
+    exit(1);
+}
+void client::client_reg(){
+    send_data(hash_gen(password));
+    recv_data();
+    close_sock();
+    exit(1);
+}
+void client::client_auth(){
+    std::chrono::milliseconds duration(10);
+    std::this_thread::sleep_for(duration);
+    send_data(hash_gen(password));
+    std::this_thread::sleep_for(duration);
+    send_data(ip);
 }
 void client::start()
 {
@@ -39,13 +62,34 @@ void client::start()
 }
 void client::connect_to_server()
 {
-    if (connect(sock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
-    {
+    sockaddr_in localAddr{};
+    socklen_t addrLen = sizeof(localAddr);
+
+    // Получаем локальный адрес сокета
+    if (getsockname(sock, (struct sockaddr*)&localAddr, &addrLen) < 0) {
+        std::cerr << "Ошибка получения информации о сокете" << std::endl;
+        return;
+    }
+
+    // Проверка, если IP сервера равен 127.0.0.1
+    if (serverAddr.sin_addr.s_addr == htonl(INADDR_LOOPBACK)) {
+        ip = "127.0.0.1";  // Если сервер локальный
+    } else {
+        // Если сервер не локальный, получаем свой сетевой IP
+        ip = inet_ntoa(localAddr.sin_addr);
+    }
+
+    // Пытаемся подключиться к серверу
+    if (connect(sock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
         close_sock();
         debugger.show_error_information("Ошибка в connect_to_server()", "Возможная причина - неверный айпи или порт сервера", "Логическая ошибка");
+        return;
     }
+
     std::cout << "Клиент соединился с сервером" << std::endl;
-    send_data("shkaf");
+
+    // Отправляем идентификатор
+    send_data(id);
 }
 std::string client::recv_data()
 {
@@ -89,7 +133,7 @@ void client::send_data(std::string data)
         close_sock();
         debugger.show_error_information("Ошибка в send_data() - string", "Результат send = -1", "Логическая ошибка");
     }
-    std::cout << "Отправлены данные строкового типа" << std::endl;
+    std::cout << "Отправлены данные строкового типа: "<<data << std::endl;
 }
 std::vector<std::string> client::recv_vector() {
     std::vector<std::string> received_vector;
@@ -148,15 +192,60 @@ void client::recv_file(std::string &file_path)
         return;
     }
 
-    uint64_t buffer;
-    ssize_t bytes_received;
-    while ((bytes_received = recv(sock, &buffer, sizeof(buffer), 0)) > 0)
+    constexpr size_t BUFFER_SIZE = 65536; // 64 KB
+    std::vector<char> buffer(BUFFER_SIZE);
+
+    size_t total_bytes_received = 0;
+    int i = 0;
+
+    while (true)
     {
-        if (buffer == 0)
-            break; // Проверка на конец файла
-        file.write(reinterpret_cast<char *>(&buffer), bytes_received);
+        std::chrono::milliseconds duration(10);
+        std::this_thread::sleep_for(duration);
+        ssize_t bytes_received = recv(sock, buffer.data(), BUFFER_SIZE, 0);
+        
+        if (bytes_received < 0)
+        {
+            std::cerr << "Ошибка при получении данных!" << std::endl;
+            file.close();
+            return;
+        }
+
+        // Проверка на сигнал конца файла (байт 0)
+        if (bytes_received == 1 && buffer[0] == 0)
+        {
+            std::cout << "Получен сигнал конца файла." << std::endl;
+            break; // Завершаем прием данных
+        }
+
+        // Если данных нет, завершаем прием
+        if (bytes_received == 0) 
+        {
+            std::cout << "Получение файла завершено!" << std::endl;
+            break;
+        }
+
+        // Запись полученных данных в файл
+        file.write(buffer.data(), bytes_received);
+        total_bytes_received += bytes_received;
+        std::cout << "Принят блок #" << ++i << ", размер: " << bytes_received << " байт" << std::endl;
     }
 
     file.close();
-    std::cout << "Файл успешно принят!" << std::endl;
+    std::cout << "Файл успешно принят! Общий размер: " << total_bytes_received << " байт" << std::endl;
+}
+
+std::string client::hash_gen(std::string password){
+    CryptoPP::SHA256 hash;
+    std::string hashed_password;
+
+    CryptoPP::StringSource(password, true,
+        new CryptoPP::HashFilter(hash,
+            new CryptoPP::HexEncoder(
+                new CryptoPP::StringSink(hashed_password)
+            )
+        )
+    );
+
+    return hashed_password;
 }
