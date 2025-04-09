@@ -17,7 +17,6 @@ void client::work(UI &intf)
     start();
     connect_to_server();
     std::chrono::milliseconds duration(10);
-    std::this_thread::sleep_for(duration);
     send_data(std::to_string(op));
     if (op==1){
         client_auth();
@@ -25,13 +24,18 @@ void client::work(UI &intf)
     else{
         client_reg();
     }
-    files = recv_vector();
-    print_vector(files);
-    std::this_thread::sleep_for(duration);
-    std::string file_path = "data.txt";
-    std::string path = "test.txt";
-    send(sock, file_path.c_str(), file_path.length(), 0);
-    recv_file(path);
+    //files = recv_vector();
+    //print_vector(files);
+    while (true)
+    {
+        std::chrono::milliseconds dur(100);
+        std::this_thread::sleep_for(duration);
+        std::string file_path = "data.txt";
+        std::string path = "test.txt";
+        send(sock, file_path.c_str(), file_path.length(), 0);
+        recv_file(path);
+        std::this_thread::sleep_for(dur);
+    }
     close_sock();
     exit(1);
 }
@@ -42,7 +46,7 @@ void client::client_reg(){
     exit(1);
 }
 void client::client_auth(){
-    std::chrono::milliseconds duration(10);
+    std::chrono::milliseconds duration(30);
     std::this_thread::sleep_for(duration);
     send_data(hash_gen(password));
     std::this_thread::sleep_for(duration);
@@ -93,10 +97,12 @@ void client::connect_to_server()
 }
 std::string client::recv_data()
 {
+    std::chrono::milliseconds duration(10);
     int rc = 0;
     while (true)
     {
         buffer = std::unique_ptr<char[]>(new char[buflen]);
+        std::this_thread::sleep_for(duration);
         rc = recv(sock, buffer.get(), buflen, MSG_PEEK);
         if (rc == 0)
         {
@@ -112,6 +118,7 @@ std::string client::recv_data()
         buflen *= 2;
     }
     std::string msg(buffer.get(), rc);
+    std::this_thread::sleep_for(duration);
     recv(sock, nullptr, rc, MSG_TRUNC);
     return msg;
     std::cout << "Данные от сервера приняты" << std::endl;
@@ -124,9 +131,11 @@ void client::close_sock()
 }
 void client::send_data(std::string data)
 {
+    std::chrono::milliseconds duration(10);
     std::unique_ptr<char[]> temp{new char[data.length() + 1]};
     strcpy(temp.get(), data.c_str());
     buffer = std::move(temp);
+    std::this_thread::sleep_for(duration);
     int sb = send(sock, buffer.get(), data.length(), 0);
     if (sb < 0)
     {
@@ -137,9 +146,10 @@ void client::send_data(std::string data)
 }
 std::vector<std::string> client::recv_vector() {
     std::vector<std::string> received_vector;
-    
+    std::chrono::milliseconds duration(10);
     // Получаем размер вектора
     uint32_t vec_size = 0;
+    std::this_thread::sleep_for(duration);
     if (recv(sock, &vec_size, sizeof(vec_size), 0) <= 0) {
         std::cerr << "Ошибка при получении размера вектора" << std::endl;
         close_sock();
@@ -150,7 +160,7 @@ std::vector<std::string> client::recv_vector() {
     // Получаем строки
     for (uint32_t i = 0; i < vec_size; ++i) {
         uint32_t str_size = 0;
-
+        std::this_thread::sleep_for(duration);
         // Получаем размер строки
         if (recv(sock, &str_size, sizeof(str_size), 0) <= 0) {
             std::cerr << "Ошибка при получении размера строки" << std::endl;
@@ -158,7 +168,7 @@ std::vector<std::string> client::recv_vector() {
             return received_vector;
         }
         str_size = ntohl(str_size);
-
+        std::this_thread::sleep_for(duration);
         // Получаем саму строку
         std::unique_ptr<char[]> buffer(new char[str_size + 1]);
         if (recv(sock, buffer.get(), str_size, 0) <= 0) {

@@ -16,7 +16,9 @@ int logger::write_log(std::string log_loc,std::string message){
     std::time_t end_time = std::chrono::system_clock::to_time_t(now);
     std::string time = std::ctime(&end_time);
     time.pop_back();
+    mtx.lock();
     log<<time<<" / "<<message<<'\n';
+    mtx.unlock();
     log.flush();
     log.close();
     return 0;

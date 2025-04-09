@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cstring>
 #include "error.h"
+#include <mutex>
 #include <boost/filesystem.hpp>
 /** @brief Класс логгера
 * @details Запись сообщений в лог файла осуществляетс в методе write_log
@@ -31,5 +32,6 @@ class logger{
     * @param [in] message Сообщение для записи в лог файл
     * @throw critical_error, если log_loc указывает путь к несуществующему файлу
     */
+    std::mutex mtx;
     int write_log(std::string log_loc,std::string message);
 };
