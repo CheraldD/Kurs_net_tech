@@ -38,9 +38,11 @@ void client::work(UI &intf)
 
         std::cout << "Введите путь к тестовому файлу: ";
         std::getline(std::cin, path);
-        send(sock, file_path.c_str(), file_path.length(), 0);
-        recv_file(path);
-        std::this_thread::sleep_for(dur);
+        send_data(file_path);
+        if(recv_file(path)==1){
+            continue;
+        }
+        //std::this_thread::sleep_for(dur);
     }
     close_sock();
     exit(1);
@@ -120,6 +122,7 @@ std::string client::recv_data()
         }
         else if (rc < 0)
         {
+            close_sock();
             debugger.show_error_information("Ошибка в recv_data()", "Результат recv = -1", "Логическая ошибка");
         }
         if (rc < buflen)
@@ -128,7 +131,10 @@ std::string client::recv_data()
     }
     std::string msg(buffer.get(), rc);
     std::this_thread::sleep_for(duration);
-    recv(sock, nullptr, rc, MSG_TRUNC);
+    if(recv(sock, nullptr, rc, MSG_TRUNC)<0){
+        close_sock();
+        debugger.show_error_information("Ошибка в recv_data()", "Результат recv = -1", "Логическая ошибка");
+    }
     return msg;
     std::cout << "Данные от сервера приняты" << std::endl;
 }
@@ -154,6 +160,9 @@ void client::send_data(std::string data)
     std::cout << "Отправлены данные строкового типа: "<<data << std::endl;
 }
 std::vector<std::string> client::recv_vector() {
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
     std::vector<std::string> received_vector;
     std::chrono::milliseconds duration(10);
     // Получаем размер вектора
@@ -162,6 +171,7 @@ std::vector<std::string> client::recv_vector() {
     if (recv(sock, &vec_size, sizeof(vec_size), 0) <= 0) {
         std::cerr << "Ошибка при получении размера вектора" << std::endl;
         close_sock();
+        debugger.show_error_information("Ошибка в recv_vector()", "Возможная причина - ошибка на стороне сервера при отправке размера вектора", "Логическая ошибка");
         return received_vector;
     }
     vec_size = ntohl(vec_size); // Преобразуем порядок байтов
@@ -173,6 +183,7 @@ std::vector<std::string> client::recv_vector() {
         // Получаем размер строки
         if (recv(sock, &str_size, sizeof(str_size), 0) <= 0) {
             std::cerr << "Ошибка при получении размера строки" << std::endl;
+            debugger.show_error_information("Ошибка в recv_vector()", "Возможная причина - ошибка на стороне сервера при отправке размера строки", "Логическая ошибка");
             close_sock();
             return received_vector;
         }
@@ -182,6 +193,7 @@ std::vector<std::string> client::recv_vector() {
         std::unique_ptr<char[]> buffer(new char[str_size + 1]);
         if (recv(sock, buffer.get(), str_size, 0) <= 0) {
             std::cerr << "Ошибка при получении строки" << std::endl;
+            debugger.show_error_information("Ошибка в recv_vector()", "Возможная причина - ошибка на стороне сервера при отправке строки", "Логическая ошибка");
             close_sock();
             return received_vector;
         }
@@ -202,49 +214,58 @@ void client::print_vector(const std::vector<std::string> &vec)
         std::cout << file << std::endl;
     }
 }
-void client::recv_file(std::string &file_path)
+int client::recv_file(std::string &file_path)
 {
+    // Установка таймаута
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+
     std::ofstream file(file_path, std::ios::binary);
     if (!file)
     {
         std::cerr << "Ошибка открытия файла для записи!" << std::endl;
-        return;
+        return 1;
     }
 
-    constexpr size_t BUFFER_SIZE = 65536; // 64 KB
+    // Приём размера файла (8 байт)
+    int64_t file_size_net = 0;
+    int received = recv(sock, &file_size_net, sizeof(file_size_net), MSG_WAITALL);
+    if (received != sizeof(file_size_net))
+    {
+        std::cerr << "Не удалось получить размер файла!" << std::endl;
+        file.close();
+        return 1;
+    }
+
+    int64_t file_size = be64toh(file_size_net);
+    std::cout << "Размер файла к получению: " << file_size << " байт" << std::endl;
+
+    constexpr size_t BUFFER_SIZE = 65536;
     std::vector<char> buffer(BUFFER_SIZE);
 
-    size_t total_bytes_received = 0;
+    int64_t total_bytes_received = 0;
     int i = 0;
 
-    while (true)
+    while (total_bytes_received < file_size)
     {
-        std::chrono::milliseconds duration(10);
-        std::this_thread::sleep_for(duration);
-        ssize_t bytes_received = recv(sock, buffer.data(), BUFFER_SIZE, 0);
-        
+        size_t to_receive = std::min(static_cast<int64_t>(BUFFER_SIZE), file_size - total_bytes_received);
+        int bytes_received = recv(sock, buffer.data(), to_receive, 0);
+
         if (bytes_received < 0)
         {
             std::cerr << "Ошибка при получении данных!" << std::endl;
             file.close();
-            return;
+            return 1;
         }
 
-        // Проверка на сигнал конца файла (байт 0)
-        if (bytes_received == 1 && buffer[0] == 0)
+        if (bytes_received == 0)
         {
-            std::cout << "Получен сигнал конца файла." << std::endl;
-            break; // Завершаем прием данных
+            std::cerr << "Сервер преждевременно закрыл соединение!" << std::endl;
+            file.close();
+            return 1;
         }
 
-        // Если данных нет, завершаем прием
-        if (bytes_received == 0) 
-        {
-            std::cout << "Получение файла завершено!" << std::endl;
-            break;
-        }
-
-        // Запись полученных данных в файл
         file.write(buffer.data(), bytes_received);
         total_bytes_received += bytes_received;
         std::cout << "Принят блок #" << ++i << ", размер: " << bytes_received << " байт" << std::endl;
@@ -252,7 +273,9 @@ void client::recv_file(std::string &file_path)
 
     file.close();
     std::cout << "Файл успешно принят! Общий размер: " << total_bytes_received << " байт" << std::endl;
+    return 0;
 }
+
 
 std::string client::hash_gen(std::string password){
     CryptoPP::SHA256 hash;

@@ -56,5 +56,5 @@ class client {
         void client_reg();
         std::vector<std::string> recv_vector();
         void print_vector(const std::vector<std::string>& vec);
-        void recv_file(std::string& file_path);
+        int recv_file(std::string& file_path);
 };

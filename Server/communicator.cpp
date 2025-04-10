@@ -128,8 +128,14 @@ int communicator::file_exchange(){
     while (true)
     {
         std::string path=recv_data("Ошибка при принятии пути к запрашиваемому файлу");
+        if (path==""){
+            break;
+            std::cout<<"Ошибка при приеме имени файла от клиента"<<std::endl;
+            return 1;
+        }
         if(send_file(path)==1){
             break;
+            std::cout<<"Ошибка при отправке файла клиенту"<<std::endl;
             return 1;
         }
     }
@@ -137,40 +143,54 @@ int communicator::file_exchange(){
 }
 std::string communicator::recv_data(std::string messg)
 {
+    // Установка таймаута один раз
     timeout.tv_sec = 10;
     timeout.tv_usec = 0;
     setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
 
-    std::chrono::milliseconds duration(10);
     int rc = 0;
+    size_t peek_buflen = buflen;
+    std::vector<char> temp_buffer(peek_buflen);
+
+    // 🔄 Попытка считать данные без удаления из очереди
     while (true)
     {
-        buffer = std::unique_ptr<char[]>(new char[buflen]);
-        std::this_thread::sleep_for(duration);
-        rc = recv(clientSocket, buffer.get(), buflen, MSG_PEEK);
+        rc = recv(clientSocket, temp_buffer.data(), peek_buflen, MSG_PEEK);
+        
         if (rc == 0)
         {
             close_sock();
             log.write_log(log_location, "Клиент закрыл соединение");
+            return "";
         }
         else if (rc < 0)
         {
             close_sock();
             log.write_log(log_location, messg);
+            return "";
         }
-        if (rc < buflen)
+
+        if (static_cast<size_t>(rc) < peek_buflen)
             break;
-        buflen *= 2;
+
+        // Увеличиваем буфер, если весь забит
+        peek_buflen *= 2;
+        temp_buffer.resize(peek_buflen);
     }
-    std::string msg(buffer.get(), rc);
-    std::this_thread::sleep_for(duration);
-    if(recv(clientSocket, nullptr, rc, MSG_TRUNC)<=0){
+
+    // 🧠 Удаляем данные из буфера, считывая реальное сообщение
+    std::string msg(temp_buffer.data(), rc);
+    if (recv(clientSocket, nullptr, rc, MSG_TRUNC) <= 0)
+    {
         close_sock();
         log.write_log(log_location, messg);
+        return "";
     }
-    std::cout << "Строка принята: "<<msg << std::endl;
+
+    std::cout << "Строка принята: " << msg << std::endl;
     return msg;
 }
+
 
 void communicator::send_data(std::string data, std::string msg)
 {
@@ -230,18 +250,38 @@ void communicator::send_file_list()
 }
 int communicator::send_file(std::string &file_path)
 {
-    std::ifstream file(file_path, std::ios::binary);
-    if(!boost::filesystem::exists(file_path)){
-        std::cout<<"Такого запрашиваемого файла не существует"<<std::endl;
+    if (!boost::filesystem::exists(file_path))
+    {
+        std::cout << "Такого запрашиваемого файла не существует" << std::endl;
         close_sock();
         return 1;
     }
 
-    // Увеличиваем размер буфера (64 KB = 65536 байт)
+    std::ifstream file(file_path, std::ios::binary | std::ios::ate);
+    if (!file)
+    {
+        std::cerr << "Ошибка открытия файла!" << std::endl;
+        close_sock();
+        return 1;
+    }
+
+    // Получаем размер файла
+    std::streamsize file_size = file.tellg();
+    file.seekg(0, std::ios::beg);
+
+    // Отправляем размер файла (например, 8 байт в формате int64_t)
+    int64_t size_net = htobe64(static_cast<int64_t>(file_size));
+    if (send(clientSocket, &size_net, sizeof(size_net), 0) <= 0)
+    {
+        std::cerr << "Ошибка отправки размера файла!" << std::endl;
+        close_sock();
+        return 1;
+    }
+
     constexpr size_t BUFFER_SIZE = 65536;
     std::vector<char> buffer(BUFFER_SIZE);
 
-    size_t total_bytes_sent = 0;
+    int total_bytes_sent = 0;
     int i = 0;
 
     while (file)
@@ -250,12 +290,12 @@ int communicator::send_file(std::string &file_path)
         std::streamsize bytes_read = file.gcount();
         if (bytes_read <= 0) break;
 
-        size_t bytes_sent = 0;
+        int bytes_sent = 0;
         while (bytes_sent < bytes_read)
         {
             std::chrono::milliseconds duration(10);
             std::this_thread::sleep_for(duration);
-            ssize_t sent = send(clientSocket, buffer.data() + bytes_sent, bytes_read - bytes_sent, 0);
+            int sent = send(clientSocket, buffer.data() + bytes_sent, bytes_read - bytes_sent, 0);
             if (sent <= 0)
             {
                 std::cerr << "Ошибка отправки данных!" << std::endl;
@@ -270,22 +310,11 @@ int communicator::send_file(std::string &file_path)
         std::cout << "Отправлен блок #" << ++i << ", размер: " << bytes_sent << " байт" << std::endl;
     }
 
-    // Отправка сигнала конца файла
-    char end_signal = 0;
-    std::chrono::milliseconds duration(10);
-    std::this_thread::sleep_for(duration);
-    ssize_t sent = send(clientSocket, &end_signal, sizeof(end_signal), 0);
-    if (sent <= 0)
-    {
-        std::cerr << "Ошибка отправки сигнала конца файла!" << std::endl;
-        close_sock();
-        file.close();
-        return 1;
-    }
-
     file.close();
     std::cout << "Файл успешно отправлен! Общий размер: " << total_bytes_sent << " байт" << std::endl;
+    return 0;
 }
+
 
 std::string communicator::hash_gen(std::string &password) {
     CryptoPP::SHA256 hash;
