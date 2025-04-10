@@ -95,10 +95,11 @@ void communicator::work()
     if(connect_to_cl()==0){
         continue;
     }
-    send_file_list();
-    if(file_exchange()==1){
-        continue;
-    }
+    std::thread client_thread(&communicator::file_exchange, this);
+    client_thread.detach();
+        /*if(file_exchange()==1){
+            continue;
+        }*/
     }
 }
 void communicator::start(){
@@ -125,6 +126,7 @@ void communicator::start(){
     std::cout << "Сокет привязан" << std::endl;
 }
 int communicator::file_exchange(){
+    send_file_list();
     while (true)
     {
         std::string path=recv_data("Ошибка при принятии пути к запрашиваемому файлу");
