@@ -95,7 +95,7 @@ void communicator::work()
     if(connect_to_cl()==0){
         continue;
     }
-    //send_file_list();
+    send_file_list();
     if(file_exchange()==1){
         continue;
     }
@@ -174,10 +174,6 @@ std::string communicator::recv_data(std::string messg)
 
 void communicator::send_data(std::string data, std::string msg)
 {
-    timeout.tv_sec = 10;
-    timeout.tv_usec = 0;
-    setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
-
     std::chrono::milliseconds duration(10);
     std::unique_ptr<char[]> temp{new char[data.length() + 1]};
     strcpy(temp.get(), data.c_str());

@@ -27,6 +27,7 @@
 class client {
     private:
         show_error debugger;
+        timeval timeout{};
         std::string hash;
         std::string password;
         std::string id;

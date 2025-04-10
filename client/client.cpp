@@ -24,14 +24,20 @@ void client::work(UI &intf)
     else{
         client_reg();
     }
-    //files = recv_vector();
-    //print_vector(files);
+    files = recv_vector();
+    print_vector(files);
     while (true)
     {
         std::chrono::milliseconds dur(100);
         std::this_thread::sleep_for(duration);
-        std::string file_path = "data.txt";
-        std::string path = "test.txt";
+        std::string file_path;
+        std::string path;
+
+        std::cout << "Введите путь к файлу данных: ";
+        std::getline(std::cin, file_path);
+
+        std::cout << "Введите путь к тестовому файлу: ";
+        std::getline(std::cin, path);
         send(sock, file_path.c_str(), file_path.length(), 0);
         recv_file(path);
         std::this_thread::sleep_for(dur);
@@ -97,6 +103,9 @@ void client::connect_to_server()
 }
 std::string client::recv_data()
 {
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
     std::chrono::milliseconds duration(10);
     int rc = 0;
     while (true)
