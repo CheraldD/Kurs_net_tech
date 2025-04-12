@@ -45,7 +45,7 @@ public:
     std::string cl_id, log_location;
     timeval timeout{};
 
-    communicator(uint port, std::string base_loc, std::string log_loc);
+    communicator(uint port,std::string log_loc);
     
     int connect_to_cl(int &new_socket);
     void send_data(int client_socket, std::string data, std::string msg);

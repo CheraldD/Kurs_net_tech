@@ -13,11 +13,10 @@ UI::UI(int argc, char* argv[])
     desc.add_options()
     ("help,h", "Помощь")
     ("Log_loc,l", po::value<std::vector<std::string>>()->multitoken(), "Путь для log файла")
-    ("Port,p", po::value<std::vector<uint>>()->multitoken(), "Порт сервера")
-    ("Base_loc,b", po::value<std::vector<std::string>>()->multitoken(), "Путь для базы данных клиентов");
+    ("Port,p", po::value<std::vector<uint>>()->multitoken(), "Порт сервера");
     try {
         po::store(po::parse_command_line(argc, argv, desc), vm);
-        if (vm.count("help") or !vm.count("Log_loc") or !vm.count("Port") or !vm.count("Base_loc")) {
+        if (vm.count("help") or !vm.count("Log_loc") or !vm.count("Port")) {
             std::cout << desc << std::endl;
             exit(0);
         }
@@ -41,15 +40,6 @@ uint UI::get_port()
         return ports.back();
     } else {
         return 1;
-    }
-}
-std::string UI::get_base_loc()
-{
-    if (vm.count("Base_loc")) {
-        const std::vector<std::string>& base_loc = vm["Base_loc"].as<std::vector<std::string>>();
-        return base_loc.back();
-    } else {
-        return "";
     }
 }
 std::string UI::get_log_loc()
