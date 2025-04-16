@@ -20,8 +20,6 @@ public:
     bool connectToDatabase(const std::string& dbName);
     bool insertUser(const std::string& username, const std::string& password, const std::string& ip);
     bool selectUserByName(std::string name);
-    bool deleteUserByName(std::string name);
-    bool alterUser(int id, const std::string& username, const std::string& password, const std::string& ip);
     void printQueryError(const QSqlQuery& query, const std::string& queryType);
     std::string current_ip_;
     std::string current_hashed_password_;

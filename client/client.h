@@ -40,8 +40,6 @@ class client {
         uint op;
         std::ifstream u_data;
         std::string hash_gen(std::string password);
-        void read_user_data_file(std::string location);
-
     public:
         const char* serv_ip;
         int sock;

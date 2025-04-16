@@ -1,10 +1,3 @@
-/** @file
-* @author Стригин А.В.
-* @version 1.0
-* @date 23.12.2023
-* @copyright ИБСТ ПГУ
-* @brief Главный файл проекта
-*/
 #include "ui.h"
 #include "communicator.h"
 #include "logger.h"
