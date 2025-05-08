@@ -26,7 +26,7 @@
 #include <cryptopp/filters.h>
 #include <cryptopp/osrng.h>
 #include "base.h"
-
+#include "protocol.h"
 class communicator
 {    
 private:
@@ -48,7 +48,7 @@ public:
     communicator(uint port,std::string log_loc);
     
     int connect_to_cl(int &new_socket);
-    void send_data(int client_socket, std::string data, std::string msg);
+    void send_data(int client_socket, const std::string& header, const std::string& client_id, int message_id, const std::string& msg);
     std::string recv_data(int client_socket, std::string messg);
     void close_sock(int sock); 
     void work();

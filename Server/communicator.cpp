@@ -32,85 +32,105 @@ int communicator::connect_to_cl(int &new_socket)
     return 0;
 }
 
-int communicator::authentification(int client_socket, std::string cl_id)
+int communicator::authentification(int client_socket,  std::string cl_id)
 {
     const std::string method_name = "authentification";
 
+    // Проверка валидности сокета
+    if (client_socket < 0) {
+        log.write_log(log_location, method_name + " | Некорректный сокет клиента");
+        std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
+        return 0;
+    }
+
+    // Генерация уникального ID сообщения
+    int msg_id = MessageProtocol::generateMessageID();
+
     // Получаем IP клиента
     sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
-    getpeername(client_socket, (struct sockaddr *)&addr, &addr_len);
-    char client_ip[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &(addr.sin_addr), client_ip, INET_ADDRSTRLEN);
+    if (getpeername(client_socket, reinterpret_cast<struct sockaddr*>(&addr), &addr_len) < 0) {
+        log.write_log(log_location, method_name + " | Не удалось получить IP клиента");
+    }
+    char client_ip[INET_ADDRSTRLEN] = "";
+    inet_ntop(AF_INET, &addr.sin_addr, client_ip, INET_ADDRSTRLEN);
 
-    // Логируем начало процесса аутентификации
     log.write_log(log_location, method_name + " | Начата аутентификация клиента | ID: " + cl_id + " | IP: " + client_ip);
     std::cout << "[INFO] [" << method_name << "] Аутентификация клиента [" << cl_id << "] с IP " << client_ip << std::endl;
 
-    // Проверяем существование клиента в базе данных
-    if (db.selectUserByName(cl_id) == 0)
-    {
-        log.write_log(log_location, method_name + " | Клиент не найден в базе | ID: " + cl_id + " | IP: " + client_ip);
-        send_data(client_socket, "UERR", method_name + " | Ошибка при отправке сообщения об отказе в аутентификации");
+    // Проверка существования пользователя
+    if (db.selectUserByName(cl_id) == 0) {
+        log.write_log(log_location, method_name + " | Клиент не найден в базе | ID: " + cl_id);
+        send_data(client_socket, "UERR", cl_id, msg_id, "Client not found");
         close_sock(client_socket);
         return 0;
     }
 
-    // Получаем данные из базы
+    // Получение ожидаемых данных из БД
     std::string cl_passw_base = db.getCurrentHashedPassword();
     std::string cl_ip_base = db.getCurrentIP();
 
-    // Получаем данные от клиента
+    // Приём пароля и IP от клиента
     std::string cl_passw_recv = recv_data(client_socket, "Ошибка при приеме пароля");
-    std::string cl_ip_recv = recv_data(client_socket, "Ошибка при приеме айпи");
+    std::string cl_ip_recv = recv_data(client_socket, "Ошибка при приеме IP");
 
-    // Сравниваем пароли
-    if (cl_passw_base != cl_passw_recv)
-    {
-        log.write_log(log_location, method_name + " | Неверный пароль | ID: " + cl_id + " | IP: " + client_ip);
+    // Проверка пароля
+    if (cl_passw_base != cl_passw_recv) {
+        log.write_log(log_location, method_name + " | Неверный пароль | ID: " + cl_id);
         std::cerr << "[WARN] [" << method_name << "] Неверный пароль клиента [" << cl_id << "]" << std::endl;
-        send_data(client_socket, "PERR", method_name + " | Ошибка при отправке сообщения об отказе в аутентификации");
+        send_data(client_socket, "PERR", cl_id, msg_id, "Invalid password");
         close_sock(client_socket);
         return 0;
     }
 
-    // Сравниваем IP адреса
-    if (cl_ip_base != cl_ip_recv)
-    {
-        log.write_log(log_location, method_name + " | Несовпадение IP-адреса | ID: " + cl_id + " | IP базы: " + cl_ip_base + " | IP получен: " + cl_ip_recv);
+    // Проверка IP-адреса
+    if (cl_ip_base != cl_ip_recv) {
+        log.write_log(log_location, method_name + " | Несовпадение IP-адреса | ID: " + cl_id + 
+                       " | Ожидалось: " + cl_ip_base + " | Получено: " + cl_ip_recv);
         std::cerr << "[WARN] [" << method_name << "] IP клиента не совпадает с базой [" << cl_id << "]" << std::endl;
-        send_data(client_socket, "IERR", method_name + " | Ошибка при отправке сообщения об отказе в аутентификации");
+        send_data(client_socket, "IERR", cl_id, msg_id, "IP mismatch");
         close_sock(client_socket);
         return 0;
     }
 
-    // Если все проверки прошли, отправляем успешный ответ
-    send_data(client_socket, "OK", method_name + " | Ошибка при отправке сообщения об аутентификации");
+    // Успешная аутентификация
+    send_data(client_socket, "OK", cl_id, msg_id, "Authentication successful");
     log.write_log(log_location, method_name + " | Аутентификация успешна | ID: " + cl_id + " | IP: " + client_ip);
     std::cout << "[INFO] [" << method_name << "] Клиент [" << cl_id << "] успешно аутентифицирован" << std::endl;
+
     return 1;
 }
 
-void communicator::registration(int client_socket, std::string cl_id)
+void communicator::registration(int client_socket,  std::string cl_id)
 {
     const std::string method_name = "registration";
+
+    // Проверка валидности сокета
+    if (client_socket < 0) {
+        log.write_log(log_location, method_name + " | Некорректный сокет клиента");
+        std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
+        return;
+    }
+
+    // Генерация уникального ID сообщения
+    int msg_id = MessageProtocol::generateMessageID();
 
     // Получаем IP клиента
     sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
-    getpeername(client_socket, (struct sockaddr *)&addr, &addr_len);
-    char client_ip_cstr[INET_ADDRSTRLEN];
-    inet_ntop(AF_INET, &(addr.sin_addr), client_ip_cstr, INET_ADDRSTRLEN);
+    if (getpeername(client_socket, reinterpret_cast<struct sockaddr*>(&addr), &addr_len) < 0) {
+        log.write_log(log_location, method_name + " | Не удалось получить IP клиента");
+    }
+    char client_ip_cstr[INET_ADDRSTRLEN] = "";
+    inet_ntop(AF_INET, &addr.sin_addr, client_ip_cstr, INET_ADDRSTRLEN);
     std::string client_ip_str = client_ip_cstr;
 
-    // Логируем начало процесса регистрации
     log.write_log(log_location, method_name + " | Начата регистрация клиента | ID: " + cl_id + " | IP: " + client_ip_str);
     std::cout << "[INFO] [" << method_name << "] Регистрация клиента [" << cl_id << "] с IP " << client_ip_str << std::endl;
 
     // Получаем пароль от клиента
     std::string password = recv_data(client_socket, "Ошибка при приеме пароля");
-    if (password.empty())
-    {
+    if (password.empty()) {
         log.write_log(log_location, method_name + " | Не получен пароль клиента | ID: " + cl_id + " | IP: " + client_ip_str);
         std::cerr << "[ERROR] [" << method_name << "] Не удалось получить пароль от клиента [" << cl_id << "]" << std::endl;
         close_sock(client_socket);
@@ -120,10 +140,9 @@ void communicator::registration(int client_socket, std::string cl_id)
     // Вставляем нового пользователя в базу данных
     db.insertUser(cl_id, password, client_ip_str);
 
-    // Отправляем клиенту сообщение об успешной регистрации
-    send_data(client_socket, "Регистрация успешна", "Ошибка отправки отладочного сообщения");
+    // Отправляем клиенту протокольное сообщение об успешной регистрации
+    send_data(client_socket, "REG_OK", cl_id, msg_id, "Registration successful");
 
-    // Логируем успешную регистрацию
     log.write_log(log_location, method_name + " | Регистрация завершена успешно | ID: " + cl_id + " | IP: " + client_ip_str);
     std::cout << "[INFO] [" << method_name << "] Регистрация клиента [" << cl_id << "] завершена успешно" << std::endl;
 
@@ -303,107 +322,74 @@ int communicator::file_exchange(int client_socket)
 
     return 0;
 }
-std::string communicator::recv_data(int client_socket, std::string messg)
+std::string communicator::recv_data(int client_socket,  std::string error_msg)
 {
     const std::string method_name = "recv_data";
 
-    // Устанавливаем таймаут на приём данных (100 секунд)
+    // Устанавливаем таймаут на приём данных
     timeout.tv_sec = 100;
     timeout.tv_usec = 0;
     setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
 
-    int rc = 0;
-    size_t peek_buflen = buflen;
-    std::vector<char> temp_buffer(peek_buflen);
+    std::vector<char> buffer(buflen);
+    int received_bytes = recv(client_socket, buffer.data(), buflen, 0);
 
-    // Логируем начало приёма данных
-    log.write_log(log_location, method_name + " | Начало приема данных от клиента (ID: " + std::to_string(client_socket) + ")");
-    std::cout << "[INFO] [" << method_name << "] Начало приема данных от клиента (ID: " << client_socket << ")" << std::endl;
-
-    // Чтение данных с флагом MSG_PEEK, чтобы узнать размер доступного сообщения
-    while (true)
+    if (received_bytes <= 0)
     {
-        rc = recv(client_socket, temp_buffer.data(), peek_buflen, MSG_PEEK); // не удаляет данные из буфера
-        if (rc == 0)
-        {
-            // Клиент закрыл соединение
-            close_sock(client_socket);
-            log.write_log(log_location, method_name + " | Клиент закрыл соединение (ID: " + std::to_string(client_socket) + ")");
-            std::cerr << "[ERROR] [" << method_name << "] Клиент закрыл соединение (ID: " << client_socket << ")" << std::endl;
-            return "";
-        }
-        else if (rc < 0)
-        {
-            // Ошибка при получении данных
-            close_sock(client_socket);
-            log.write_log(log_location, method_name + " | " + messg);
-            std::cerr << "[ERROR] [" << method_name << "] " << messg << std::endl;
-            return "";
-        }
-
-        // Если считано меньше, чем размер буфера — значит всё сообщение доступно
-        if (static_cast<size_t>(rc) < peek_buflen)
-            break;
-
-        // Иначе удваиваем буфер и пробуем снова
-        peek_buflen *= 2;
-        temp_buffer.resize(peek_buflen);
-    }
-
-    // Преобразуем принятые байты в строку
-    std::string msg(temp_buffer.data(), rc);
-
-    // Удаляем прочитанные данные из буфера с помощью MSG_TRUNC
-    if (recv(client_socket, nullptr, rc, MSG_TRUNC) <= 0)
-    {
-        // Ошибка при очистке буфера
         close_sock(client_socket);
-        log.write_log(log_location, method_name + " | " + messg);
-        std::cerr << "[ERROR] [" << method_name << "] " << messg << std::endl;
+        log.write_log(log_location, method_name + " | Ошибка или закрыто соединение: " + error_msg);
+        std::cerr << "[ERROR] [" << method_name << "] " << error_msg << std::endl;
         return "";
     }
 
-    // Логируем успешно принятые данные
-    log.write_log(log_location, method_name + " | Принятые данные от клиента (ID: " + std::to_string(client_socket) + "): " + msg);
-    std::cout << "[INFO] [" << method_name << "] Строка принята от клиента (ID: " << client_socket << "): " << msg << std::endl;
+    std::string raw_data(buffer.data(), received_bytes);
 
-    return msg;
+    log.write_log(log_location, method_name + " | Принято протокольное сообщение от клиента (ID: " + std::to_string(client_socket) + "): " + raw_data);
+    std::cout << "[INFO] [" << method_name << "] Принято сообщение: " << raw_data << std::endl;
+
+    try {
+        MessageProtocol::ParsedMessage message = MessageProtocol::parse(raw_data);
+        return message.message;  // Возвращаем только полезную нагрузку
+    } catch (const std::exception& e) {
+        log.write_log(log_location, method_name + " | Ошибка парсинга протокольного сообщения: " + std::string(e.what()));
+        std::cerr << "[ERROR] [" << method_name << "] Ошибка парсинга: " << e.what() << std::endl;
+        return "";
+    }
 }
-void communicator::send_data(int client_socket, std::string data, std::string msg)
+void communicator::send_data(int client_socket, const std::string& header,
+                             const std::string& client_id, int message_id,
+                             const std::string& msg)
 {
     const std::string method_name = "send_data";
 
-    // Логируем начало отправки данных
-    log.write_log(log_location, method_name + " | Начало отправки данных клиенту (ID: " + std::to_string(client_socket) + ")");
-    std::cout << "[INFO] [" << method_name << "] Начало отправки данных клиенту (ID: " << client_socket << ")" << std::endl;
-
-    // Пауза для синхронизации (предотвращение наложения пакетов)
-    std::chrono::milliseconds duration(10);
-
-    // Создаем временный буфер и копируем туда строку
-    std::unique_ptr<char[]> temp{new char[data.length() + 1]};
-    strcpy(temp.get(), data.c_str());
-
-    // Присваиваем буфер для отправки
-    buffer = std::move(temp);
-
-    // Ждем перед отправкой
-    std::this_thread::sleep_for(duration);
-
-    // Отправка строки клиенту
-    int sb = send(client_socket, buffer.get(), data.length(), 0);
-    if (sb <= 0)
-    {
-        // Ошибка отправки
-        log.write_log(log_location, method_name + " | Ошибка отправки данных клиенту (ID: " + std::to_string(client_socket) + ")");
-        std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки данных клиенту (ID: " << client_socket << ")" << std::endl;
-        close_sock(client_socket);
+    if (client_socket < 0) {
+        log.write_log(log_location, method_name + " | Некорректный сокет клиента");
+        std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
         return;
     }
 
-    // Лог успешной отправки
-    log.write_log(log_location, method_name + " | Данные успешно отправлены клиенту (ID: " + std::to_string(client_socket) + ")");
-    std::cout << "[INFO] [" << method_name << "] Данные успешно отправлены клиенту (ID: " << client_socket << ")" << std::endl;
+    log.write_log(log_location, method_name + " | Подготовка отправки данных клиенту (ID: " + std::to_string(client_socket) + ")");
+    std::cout << "[INFO] [" << method_name << "] Подготовка отправки данных клиенту (ID: " << client_socket << ")" << std::endl;
+
+    std::string packet = MessageProtocol::build(header, client_id, message_id, msg);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10)); // пауза
+
+    size_t total_sent = 0;
+    while (total_sent < packet.size()) {
+        int sent_now = send(client_socket, packet.c_str() + total_sent, packet.size() - total_sent, 0);
+        if (sent_now <= 0) {
+            log.write_log(log_location, method_name + " | Ошибка отправки данных после " +
+                          std::to_string(total_sent) + " байт клиенту (ID: " + std::to_string(client_socket) + ")");
+            std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки клиенту (ID: " << client_socket << ")" << std::endl;
+            close_sock(client_socket);
+            return;
+        }
+        total_sent += sent_now;
+    }
+
+    log.write_log(log_location, method_name + " | Успешно отправлено " + std::to_string(total_sent) + " байт клиенту (ID: " + std::to_string(client_socket) + ")");
+    std::cout << "[INFO] [" << method_name << "] Успешно отправлено " << total_sent << " байт клиенту (ID: " << client_socket << ")" << std::endl;
 }
 void communicator::close_sock(int client_socket)
 {
@@ -426,140 +412,93 @@ void communicator::close_sock(int client_socket)
 void communicator::send_file_list(int client_socket)
 {
     const std::string method_name = "send_file_list";
-    std::chrono::milliseconds duration(10); // Пауза между отправками для синхронизации
-
+    std::chrono::milliseconds duration(10);
     data_handler handler;
-    std::vector<std::string> files = handler.get_file_list(); // Получение списка файлов
+    std::vector<std::string> files = handler.get_file_list();
 
-    // Проверка: если список пуст, логируем и выходим
-    if (files.empty())
-    {
-        std::cerr << "Отправка вектора: список файлов пуст!" << std::endl;
+    if (files.empty()) {
         log.write_log(log_location, method_name + " | Список файлов пуст");
+        std::cerr << "[WARN] [" << method_name << "] Список файлов пуст" << std::endl;
         return;
     }
 
-    // Отправляем размер вектора (кол-во файлов), приведённый к сетевому порядку байт
-    uint32_t vector_size = htonl(files.size());
-    std::this_thread::sleep_for(duration); // Пауза перед отправкой
-    if (send(client_socket, &vector_size, sizeof(vector_size), 0) <= 0)
-    {
-        // Ошибка отправки — логируем и закрываем соединение
-        close_sock(client_socket);
-        std::cerr << "Ошибка отправки размера вектора" << std::endl;
-        log.write_log(log_location, method_name + " | Ошибка отправки размера вектора");
-        return;
+    int msg_id = MessageProtocol::generateMessageID();
+
+    // Отправляем количество файлов
+    send_data(client_socket, "FILE_COUNT", "server", msg_id, std::to_string(files.size()));
+    std::this_thread::sleep_for(duration);
+
+    // Отправка каждого файла
+    for (const auto& file : files) {
+        msg_id = MessageProtocol::generateMessageID();
+        send_data(client_socket, "FILE_ENTRY", "server", msg_id, file);
+        std::this_thread::sleep_for(duration);
     }
 
-    // Поочередно отправляем каждый файл из списка
-    for (const auto &file : files)
-    {
-        // Сначала отправляем длину строки (имени файла)
-        uint32_t length = htonl(file.size());
-
-        std::this_thread::sleep_for(duration); // Пауза
-        if (send(client_socket, &length, sizeof(length), 0) <= 0)
-        {
-            close_sock(client_socket);
-            std::cerr << "Ошибка отправки размера строки" << std::endl;
-            log.write_log(log_location, method_name + " | Ошибка отправки размера строки");
-            return;
-        }
-
-        // Затем отправляем само имя файла
-        std::this_thread::sleep_for(duration); // Пауза
-        if (send(client_socket, file.c_str(), file.size(), 0) <= 0)
-        {
-            close_sock(client_socket);
-            std::cerr << "Ошибка отправки данных строки" << std::endl;
-            log.write_log(log_location, method_name + " | Ошибка отправки данных строки");
-            return;
-        }
-    }
-
-    // Все файлы успешно отправлены — логируем
-    std::cout << "[INFO] " << method_name << " | Файлы успешно отправлены" << std::endl;
-    log.write_log(log_location, method_name + " | Файлы успешно отправлены");
+    log.write_log(log_location, method_name + " | Все файлы успешно отправлены клиенту");
+    std::cout << "[INFO] [" << method_name << "] Все файлы успешно отправлены клиенту" << std::endl;
 }
 
-int communicator::send_file(int client_socket, std::string &file_path)
+int communicator::send_file(int client_socket, std::string& file_path)
 {
     const std::string method_name = "send_file";
 
-    // Проверка существования файла по указанному пути
-    if (!boost::filesystem::exists(file_path))
-    {
-        std::cerr << "Такого запрашиваемого файла не существует" << std::endl;
+    if (client_socket < 0) {
+        log.write_log(log_location, method_name + " | Некорректный сокет клиента");
+        std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
+        return 1;
+    }
+
+    if (!boost::filesystem::exists(file_path)) {
         log.write_log(log_location, method_name + " | Файл не найден: " + file_path);
+        std::cerr << "[ERROR] [" << method_name << "] Файл не найден: " << file_path << std::endl;
         close_sock(client_socket);
         return 1;
     }
 
-    // Открываем файл в бинарном режиме для чтения
     std::ifstream file(file_path, std::ios::binary | std::ios::ate);
-    if (!file)
-    {
-        std::cerr << "Ошибка открытия файла!" << std::endl;
+    if (!file) {
         log.write_log(log_location, method_name + " | Ошибка открытия файла: " + file_path);
+        std::cerr << "[ERROR] [" << method_name << "] Ошибка открытия файла: " << file_path << std::endl;
         close_sock(client_socket);
         return 1;
     }
 
-    // Получаем размер файла
     std::streamsize file_size = file.tellg();
     file.seekg(0, std::ios::beg);
 
-    // Отправляем размер файла в сетевом порядке байт
-    int64_t size_net = htobe64(static_cast<int64_t>(file_size));
-    if (send(client_socket, &size_net, sizeof(size_net), 0) <= 0)
-    {
-        std::cerr << "Ошибка отправки размера файла!" << std::endl;
-        log.write_log(log_location, method_name + " | Ошибка отправки размера файла: " + file_path);
-        close_sock(client_socket);
-        return 1;
-    }
+    int msg_id = MessageProtocol::generateMessageID();
+    send_data(client_socket, "FILE_SIZE", "server", msg_id, std::to_string(file_size));
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    // Размер буфера для отправки данных
-    constexpr size_t BUFFER_SIZE = 262144; // 128 KB
+    constexpr size_t BUFFER_SIZE = 65536;
     std::vector<char> buffer(BUFFER_SIZE);
+    int total_bytes_sent = 0;
+    int block_index = 0;
 
-    int total_bytes_sent = 0; // Общее количество отправленных байт
-    int i = 0;                // Индекс блока
-
-    // Чтение файла и отправка блоками
-    while (file)
-    {
-        file.read(buffer.data(), BUFFER_SIZE); // Чтение блока данных
+    while (file) {
+        file.read(buffer.data(), BUFFER_SIZE);
         std::streamsize bytes_read = file.gcount();
         if (bytes_read <= 0)
-            break; // Если не удалось прочитать данные, выходим
+            break;
 
-        int bytes_sent = 0;
-        // Отправка данных по частям (если блок данных больше, чем размер буфера)
-        while (bytes_sent < bytes_read)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10)); // Пауза между отправками для синхронизации
-            int sent = send(client_socket, buffer.data() + bytes_sent, bytes_read - bytes_sent, 0);
-            if (sent <= 0)
-            {
-                std::cerr << "Ошибка отправки данных!" << std::endl;
-                log.write_log(log_location, method_name + " | Ошибка отправки данных: " + file_path);
-                close_sock(client_socket);
-                file.close();
-                return 1;
-            }
-            bytes_sent += sent;
-        }
+        std::string data_chunk(buffer.data(), bytes_read);
+        msg_id = MessageProtocol::generateMessageID();
+        send_data(client_socket, "FILE_CHUNK", "server", msg_id, data_chunk);
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-        total_bytes_sent += bytes_sent; // Обновляем количество отправленных байт
-        std::cout << "[INFO] " << method_name << " | Отправлен блок #" << ++i << ", размер: " << bytes_sent << " байт" << std::endl;
+        total_bytes_sent += bytes_read;
+        std::cout << "[INFO] [" << method_name << "] Отправлен блок #" << block_index++
+                  << ", размер: " << bytes_read << " байт" << std::endl;
     }
 
-    // Закрытие файла после отправки
     file.close();
 
-    // Логируем успешную отправку файла
-    std::cout << "[INFO] " << method_name << " | Файл успешно отправлен! Общий размер: " << total_bytes_sent << " байт" << std::endl;
+    msg_id = MessageProtocol::generateMessageID();
+    send_data(client_socket, "FILE_END", "server", msg_id, "EOF");
+
+    std::cout << "[INFO] [" << method_name << "] Файл успешно отправлен! Общий размер: "
+              << total_bytes_sent << " байт" << std::endl;
     log.write_log(log_location, method_name + " | Файл успешно отправлен: " + file_path);
     return 0;
 }
