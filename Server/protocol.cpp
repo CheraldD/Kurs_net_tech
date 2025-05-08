@@ -10,8 +10,9 @@ std::string MessageProtocol::build(const std::string& header,
            "|messageID:" + std::to_string(messageID) +
            "|message:" + messageBody;
 }
-
 MessageProtocol::ParsedMessage MessageProtocol::parse(const std::string& raw) {
+    std::mutex mtx;
+    mtx.lock();
     ParsedMessage result;
     size_t pos = 0;
     size_t next = raw.find('|');
@@ -42,7 +43,7 @@ MessageProtocol::ParsedMessage MessageProtocol::parse(const std::string& raw) {
     if (last.rfind("message:", 0) == 0) {
         result.message = last.substr(8);
     }
-
+    mtx.unlock();
     return result;
 }
 

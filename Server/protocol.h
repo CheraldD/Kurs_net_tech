@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-
+#include <mutex>
 class MessageProtocol {
 public:
     struct ParsedMessage {
@@ -16,6 +16,5 @@ public:
                              const std::string& messageBody);
 
     static ParsedMessage parse(const std::string& raw);
-
     static int generateMessageID();
 };

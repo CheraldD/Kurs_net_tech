@@ -2,146 +2,143 @@
 void client::work(UI &intf)
 {
     const std::string method_name = "client::work";
+    std::cout << "[INFO] [" << method_name << "] Начало работы клиента." << std::endl;
 
     // Получаем параметры из интерфейса пользователя
-    serv_ip = intf.get_serv_ip().c_str(); // IP адрес сервера
-    port = intf.get_port();               // Порт для подключения
-    op = intf.get_op();                   // Операция: регистрация или аутентификация
-    password = intf.get_password();       // Пароль
-    id = intf.get_username();             // Имя пользователя
+    serv_ip = intf.get_serv_ip().c_str();
+    port = intf.get_port();
+    op = intf.get_op();
+    password = intf.get_password();
+    id = intf.get_username();
 
-    std::cout << "[INFO] " << method_name << " | Начало работы клиента." << std::endl;
+    start();
+    connect_to_server();
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
-    start();             // Инициализация клиента
-    connect_to_server(); // Подключение к серверу
+    // Отправляем тип операции (регистрация / аутентификация)
+    send_data("OP", id, 0, std::to_string(op));
 
-    std::chrono::milliseconds duration(10); // Задержка для стабилизации
-    send_data(std::to_string(op));          // Отправляем информацию о типе операции (регистрация или аутентификация)
-
-    // В зависимости от выбранной операции выполняем аутентификацию или регистрацию
     if (op == 1)
     {
-        std::cout << "[INFO] " << method_name << " | Выполняется аутентификация клиента..." << std::endl;
-        client_auth(); // Выполняем аутентификацию
-        std::cout << "[INFO] " << method_name << " | Аутентификация успешна." << std::endl;
+        std::cout << "[INFO] [" << method_name << "] Выполняется аутентификация клиента..." << std::endl;
+        client_auth();
+        std::cout << "[INFO] [" << method_name << "] Аутентификация успешна." << std::endl;
     }
     else
     {
-        std::cout << "[INFO] " << method_name << " | Выполняется регистрация клиента..." << std::endl;
-        client_reg(); // Выполняем регистрацию
-        std::cout << "[INFO] " << method_name << " | Регистрация успешна." << std::endl;
+        std::cout << "[INFO] [" << method_name << "] Выполняется регистрация клиента..." << std::endl;
+        client_reg();
+        std::cout << "[INFO] [" << method_name << "] Регистрация успешна." << std::endl;
     }
 
-    // Получаем список файлов с сервера
-    files = recv_vector();
-    std::cout << "[INFO] " << method_name << " | Получен список файлов с сервера:" << std::endl;
-    print_vector(files); // Выводим список файлов
+    // Получение списка файлов
+    files = recv_vector();  // Оставляем как есть
+    std::cout << "[INFO] [" << method_name << "] Получен список файлов с сервера:" << std::endl;
+    print_vector(files);
 
-    // Основной цикл работы клиента
+    // Основной цикл
     while (true)
     {
-        std::chrono::milliseconds dur(100);    // Задержка между итерациями
-        std::this_thread::sleep_for(duration); // Ожидаем немного
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-        std::string file_path; // Путь к запрашиваемому файлу
-        std::string path;      // Путь для сохранения файла
+        std::string file_path, save_path;
 
-        // Вводим путь к файлу
-        std::cout << "[INFO] " << method_name << " | Введите путь к файлу данных: ";
+        std::cout << "[INPUT] Введите путь к файлу данных: ";
         std::getline(std::cin, file_path);
 
-        // Вводим путь для сохранения полученного файла
-        std::cout << "[INFO] " << method_name << " | Введите путь для сохранения запрашиваемого файла: ";
-        std::getline(std::cin, path);
+        std::cout << "[INPUT] Введите путь для сохранения файла: ";
+        std::getline(std::cin, save_path);
 
-        // Отправляем на сервер путь к запрашиваемому файлу
-        std::cout << "[INFO] " << method_name << " | Отправка пути файла на сервер: " << file_path << std::endl;
-        send_data(file_path);
-
-        // Получаем файл с сервера
-        std::cout << "[INFO] " << method_name << " | Получение файла..." << std::endl;
-        if (recv_file(path) == 1)
-        { // Если возникла ошибка при получении файла
-            std::cout << "[ERROR] " << method_name << " | Ошибка при получении файла: " << path << std::endl;
-            continue; // Пропускаем итерацию, продолжаем работу
+        if (file_path.empty() || save_path.empty())
+        {
+            std::cerr << "[WARN] [" << method_name << "] Путь не может быть пустым." << std::endl;
+            continue;
         }
 
-        // Если файл успешно получен
-        std::cout << "[INFO] " << method_name << " | Файл успешно получен: " << path << std::endl;
+        // Отправляем путь к файлу
+        std::cout << "[INFO] [" << method_name << "] Отправка пути к файлу на сервер: " << file_path << std::endl;
+        send_data("REQ_FILE", id, 0, file_path);
+
+        std::cout << "[INFO] [" << method_name << "] Получение файла с сервера..." << std::endl;
+        if (recv_file(save_path) == 1)
+        {
+            std::cerr << "[ERROR] [" << method_name << "] Ошибка при получении файла: " << save_path << std::endl;
+            continue;
+        }
+
+        std::cout << "[INFO] [" << method_name << "] Файл успешно получен: " << save_path << std::endl;
     }
 
-    close_sock(); // Закрываем соединение
-    std::cout << "[INFO] " << method_name << " | Клиент завершил работу." << std::endl;
-    exit(1); // Завершаем работу клиента
+    close_sock();
+    std::cout << "[INFO] [" << method_name << "] Клиент завершил работу." << std::endl;
+    exit(1);
 }
+
 
 void client::client_reg()
 {
     const std::string method_name = "client::client_reg";
 
-    // Начало регистрации пользователя
-    std::cout << "[INFO] " << method_name << " | Инициализация регистрации пользователя..." << std::endl;
+    std::cout << "[INFO] [" << method_name << "] Инициализация регистрации пользователя..." << std::endl;
 
-    // Генерация хэша пароля для отправки на сервер
-    std::cout << "[INFO] " << method_name << " | Генерация хэша пароля для отправки на сервер..." << std::endl;
-    std::string hashed_password = hash_gen(password); // Хэшируем пароль
+    std::cout << "[INFO] [" << method_name << "] Генерация хэша пароля для отправки на сервер..." << std::endl;
+    std::string hashed_password = hash_gen(password);
 
-    // Отправка хэшированного пароля на сервер
-    std::cout << "[INFO] " << method_name << " | Отправка хэшированного пароля на сервер..." << std::endl;
-    send_data(hashed_password); // Отправляем хэш пароля серверу
+    std::cout << "[INFO] [" << method_name << "] Отправка хэшированного пароля на сервер..." << std::endl;
+    send_data("REG_PASS", id, 0, hashed_password);
 
-    // Ожидание ответа от сервера
-    std::cout << "[INFO] " << method_name << " | Ожидание ответа от сервера..." << std::endl;
-    std::string answ = recv_data(); // Получаем ответ от сервера
+    std::cout << "[INFO] [" << method_name << "] Ожидание ответа от сервера..." << std::endl;
+    std::string answ = recv_data("Ошибка при принятии ответа о регистрации с сервера");
 
-    // Проверка ответа от сервера
     if (answ != "Регистрация успешна")
     {
-        close_sock(); // Закрытие соединения
-        // Показать информацию об ошибке, если регистрация не успешна
+        close_sock();
         debugger.show_error_information("Ошибка в client_reg()", "Возможная причина - ошибка запроса к БД на сервере", "Логическая ошибка");
+        exit(1);
     }
 
-    // Если регистрация успешна
-    std::cout << "[INFO] " << method_name << " | Регистрация завершена. Закрытие соединения." << std::endl;
-    close_sock(); // Закрытие соединения
+    std::cout << "[INFO] [" << method_name << "] Регистрация завершена. Закрытие соединения." << std::endl;
+    close_sock();
 
-    // Завершаем работу клиента
-    std::cout << "[INFO] " << method_name << " | Завершение работы клиента." << std::endl;
-    exit(1); // Завершаем выполнение программы
+    std::cout << "[INFO] [" << method_name << "] Завершение работы клиента." << std::endl;
+    exit(0);
 }
+
 
 void client::client_auth()
 {
-    std::chrono::milliseconds duration(30); // Задержка для стабилизации
+    const std::string method_name = "client::client_auth";
+    std::chrono::milliseconds duration(30);
 
-    // Начало аутентификации
-    std::cout << "[INFO] Начало аутентификации..." << std::endl;
-    std::this_thread::sleep_for(duration); // Ожидаем немного
+    std::cout << "[INFO] [" << method_name << "] Начало аутентификации..." << std::endl;
+    std::this_thread::sleep_for(duration);
 
-    // Отправка хэшированного пароля на сервер
-    std::cout << "[INFO] Отправка хэшированного пароля..." << std::endl;
-    send_data(hash_gen(password));         // Хэшируем пароль и отправляем на сервер
-    std::this_thread::sleep_for(duration); // Ожидаем немного
+    // Отправка хэша пароля
+    std::string hashed_password = hash_gen(password);
+    std::cout << "[INFO] [" << method_name << "] Отправка хэшированного пароля..." << std::endl;
+    send_data("AUTH_PASS", id, 0, hashed_password);
+    std::this_thread::sleep_for(duration);
 
     // Отправка IP-адреса клиента
-    std::cout << "[INFO] Отправка IP-адреса клиента..." << std::endl;
-    send_data(ip); // Отправляем IP-адрес клиента
+    std::cout << "[INFO] [" << method_name << "] Отправка IP-адреса клиента..." << std::endl;
+    send_data( "AUTH_IP", id, 0, ip);
+    std::this_thread::sleep_for(duration);
 
-    // Получаем ответ от сервера
-    std::string flag = recv_data(); // Ответ от сервера (флаг ошибки или успешности)
+    // Получение ответа от сервера
+    std::cout << "[INFO] [" << method_name << "] Ожидание ответа от сервера..." << std::endl;
+    std::string flag = recv_data("Ошибка при принятии ответа о аутентификации с сервера");
 
-    // Обработка флага ошибки
-    if (flag != "OK")
+    if (flag != "Аутентификация успешна")
     {
-        std::cout << "[INFO] Флаг ошибки: " << flag << std::endl;
-        // Показать информацию об ошибке в зависимости от флага
-        debugger.show_error_information("Ошибка в client_auth()", "UERR - неверное имя пользователя \n PERR - неверный пароль \n IERR - неверный айпи", "Логическая ошибка");
+        std::cout << "[ERROR] [" << method_name << "] Флаг ошибки: " << flag << std::endl;
+        debugger.show_error_information("Ошибка в client_auth()", "UERR - неверное имя пользователя \nPERR - неверный пароль \nIERR - неверный айпи", "Логическая ошибка");
+        close_sock();
+        exit(1);
     }
 
-    // Если аутентификация успешна
-    std::cout << "[INFO] Аутентификация завершена" << std::endl;
+    std::cout << "[INFO] [" << method_name << "] Аутентификация завершена успешно." << std::endl;
 }
+
 
 void client::start()
 {
@@ -170,114 +167,110 @@ void client::start()
 
 void client::connect_to_server()
 {
-    std::cout << "[INFO] Получаем информацию о локальном сокете..." << std::endl;
+    const std::string method_name = "client::connect_to_server";
+    std::cout << "[INFO] [" << method_name << "] Получаем информацию о локальном сокете..." << std::endl;
     sockaddr_in localAddr{};
     socklen_t addrLen = sizeof(localAddr);
 
     // Получаем локальный адрес сокета
     if (getsockname(sock, (struct sockaddr *)&localAddr, &addrLen) < 0)
     {
-        std::cerr << "[ERROR] Ошибка получения информации о сокете" << std::endl;
+        std::cerr << "[ERROR] [" << method_name << "] Ошибка получения информации о сокете" << std::endl;
         return;
     }
-    std::cout << "[INFO] Локальный адрес сокета получен: " << inet_ntoa(localAddr.sin_addr) << std::endl;
+    std::cout << "[INFO] [" << method_name << "] Локальный адрес сокета получен: " << inet_ntoa(localAddr.sin_addr) << std::endl;
 
     // Проверка, если IP сервера равен 127.0.0.1 (локальный сервер)
     if (serverAddr.sin_addr.s_addr == htonl(INADDR_LOOPBACK))
     {
         ip = "127.0.0.1"; // Если сервер локальный
-        std::cout << "[INFO] Сервер локальный. Используется IP: 127.0.0.1" << std::endl;
+        std::cout << "[INFO] [" << method_name << "] Сервер локальный. Используется IP: 127.0.0.1" << std::endl;
     }
     else
     {
-        // Если сервер не локальный, получаем свой сетевой IP
-        ip = inet_ntoa(localAddr.sin_addr);
-        std::cout << "[INFO] Сервер не локальный. Используется IP: " << ip << std::endl;
+        ip = inet_ntoa(localAddr.sin_addr); // Получаем сетевой IP
+        std::cout << "[INFO] [" << method_name << "] Сервер не локальный. Используется IP: " << ip << std::endl;
     }
 
     // Пытаемся подключиться к серверу
-    std::cout << "[INFO] Пытаемся подключиться к серверу..." << std::endl;
+    std::cout << "[INFO] [" << method_name << "] Пытаемся подключиться к серверу..." << std::endl;
     if (connect(sock, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
     {
         close_sock();
-        std::cerr << "[ERROR] Ошибка подключения к серверу. Проверьте IP или порт." << std::endl;
+        std::cerr << "[ERROR] [" << method_name << "] Ошибка подключения к серверу. Проверьте IP или порт." << std::endl;
         debugger.show_error_information("Ошибка в connect_to_server()", "Возможная причина - неверный айпи или порт сервера", "Логическая ошибка");
         return;
     }
 
-    std::cout << "[INFO] Клиент успешно подключился к серверу" << std::endl;
+    std::cout << "[INFO] [" << method_name << "] Клиент успешно подключился к серверу" << std::endl;
 
-    // Отправляем идентификатор клиента
-    std::cout << "[INFO] Отправляем идентификатор клиента: " << id << std::endl;
-    send_data(id);
+    // Отправляем идентификатор клиента с заголовком
+    std::cout << "[INFO] [" << method_name << "] Отправляем идентификатор клиента: " << id << std::endl;
+    send_data( "CLIENT_ID", id, 0, id);
 }
-std::string client::recv_data()
+// (send_data unchanged above)
+
+std::string client::recv_data(std::string error_msg)
 {
     const std::string method_name = "recv_data";
 
-    // Устанавливаем таймаут ожидания получения данных
-    timeout.tv_sec = 10;
+    // Устанавливаем таймаут на приём данных
+    timeout.tv_sec = 100;
     timeout.tv_usec = 0;
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
 
-    std::chrono::milliseconds duration(10);
-    int rc = 0;
-
-    std::cout << "[INFO] " << method_name << " | Ожидаем данные от сервера..." << std::endl;
-
-    // Пытаемся получить данные от сервера
-    while (true)
-    {
-        // Выделяем новый буфер
-        buffer = std::unique_ptr<char[]>(new char[buflen]);
-        std::this_thread::sleep_for(duration); // Небольшая задержка перед чтением
-
-        // MSG_PEEK — читаем данные, но не удаляем их из очереди
-        rc = recv(sock, buffer.get(), buflen, MSG_PEEK);
-
-        if (rc == 0)
-        {
-            // Сервер закрыл соединение
-            std::cerr << "[ERROR] " << method_name << " | Принято 0 байт от сервера. Закрываем сокет." << std::endl;
-            close_sock();
-            debugger.show_error_information("Ошибка в recv_data()", "Принято 0 байт от сервера", "Логическая ошибка");
-            return "";
-        }
-        else if (rc < 0)
-        {
-            // Произошла ошибка при приеме
-            std::cerr << "[ERROR] " << method_name << " | Ошибка при получении данных: recv() вернуло " << rc << std::endl;
-            close_sock();
-            debugger.show_error_information("Ошибка в recv_data()", "Результат recv = -1", "Логическая ошибка");
-            return "";
-        }
-
-        if (rc < buflen)
-            break; // Данные успешно помещаются в буфер, можно продолжить
-
-        // Если буфер переполнен, увеличиваем его размер
-        buflen *= 2;
-        std::cout << "[INFO] " << method_name << " | Увеличиваем буфер до " << buflen << " байт." << std::endl;
-    }
-
-    // Формируем строку из принятых данных
-    std::string msg(buffer.get(), rc);
-
-    std::this_thread::sleep_for(duration); // Небольшая задержка
-
-    // MSG_TRUNC используется здесь ошибочно — он не работает с нулевым указателем
-    if (recv(sock, nullptr, rc, MSG_TRUNC) < 0)
-    {
-        std::cerr << "[ERROR] " << method_name << " | Ошибка при подтверждении получения данных (MSG_TRUNC)." << std::endl;
+    // 1) Принять пакет LENGTH, содержащий размер следующего DATA-пакета
+    std::vector<char> len_buf(buflen);
+    int len_bytes = recv(sock, len_buf.data(), buflen, 0);
+    if (len_bytes <= 0) {
         close_sock();
-        debugger.show_error_information("Ошибка в recv_data()", "Результат recv = -1", "Логическая ошибка");
+        std::cerr << "[ERROR] [" << method_name << "] " << error_msg << " (LENGTH)" << std::endl;
+        return "";
+    }
+    // распарсить LENGTH-пакет целиком
+    std::string len_raw(len_buf.data(), len_bytes);
+    MessageProtocol::ParsedMessage len_msg;
+    try {
+        len_msg = MessageProtocol::parse(len_raw);
+    } catch (const std::exception &e) {
+        std::cerr << "[ERROR] [" << method_name << "] Ошибка парсинга LENGTH: " << e.what() << std::endl;
+        return "";
+    }
+    int payload_size = 0;
+    try {
+        payload_size = std::stoi(len_msg.message);
+    } catch (...) {
+        std::cerr << "[ERROR] [" << method_name << "] Неверный размер payload: " << len_msg.message << std::endl;
         return "";
     }
 
-    std::cout << "[INFO] " << method_name << " | Данные успешно получены от сервера. Размер данных: " << rc << " байт." << std::endl;
+    // 2) Принять DATA-пакет указанного размера
+    std::vector<char> data_buf;
+    data_buf.reserve(payload_size);
+    int total = 0;
+    while (total < payload_size) {
+        int to_read = std::min(buflen, payload_size - total);
+        int r = recv(sock, len_buf.data(), to_read, 0);
+        if (r <= 0) {
+            close_sock();
+            std::cerr << "[ERROR] [" << method_name << "] " << error_msg << " (DATA)" << std::endl;
+            return "";
+        }
+        data_buf.insert(data_buf.end(), len_buf.data(), len_buf.data() + r);
+        total += r;
+    }
 
-    return msg;
+    // распарсить DATA-пакет
+    std::string data_raw(data_buf.data(), data_buf.size());
+    try {
+        auto pm = MessageProtocol::parse(data_raw);
+        return pm.message;
+    } catch (const std::exception &e) {
+        std::cerr << "[ERROR] [" << method_name << "] Ошибка парсинга DATA: " << e.what() << std::endl;
+        return "";
+    }
 }
+
 void client::close_sock()
 {
     std::cout << "[INFO] Закрытие сокета клиента..." << std::endl;
@@ -293,99 +286,75 @@ void client::close_sock()
         std::cerr << "[ERROR] Ошибка при закрытии сокета клиента" << std::endl;
     }
 }
-void client::send_data(std::string data)
+void client::send_data(const std::string& header,
+                             const std::string& client_id, int message_id,
+                             const std::string& msg)
 {
-    std::chrono::milliseconds duration(10);
+    const std::string method_name = "send_data";
 
-    // Создаем временный буфер и копируем в него строку для отправки
-    std::unique_ptr<char[]> temp{new char[data.length() + 1]};
-    strcpy(temp.get(), data.c_str());
-
-    // Передаем временный буфер в основной, чтобы он жил до завершения send
-    buffer = std::move(temp);
-
-    // Небольшая задержка, возможно, для разгрузки CPU или задержки между отправками
-    std::this_thread::sleep_for(duration);
-
-    // Отправляем данные на сервер
-    int sb = send(sock, buffer.get(), data.length(), 0);
-
-    if (sb < 0)
-    {
-        // Обработка ошибки отправки
-        std::cerr << "[ERROR] Ошибка отправки данных строкового типа" << std::endl;
-        close_sock();
-        debugger.show_error_information("Ошибка в send_data() - string", "Результат send = -1", "Логическая ошибка");
+    if (sock < 0) {
+        std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет сервера" << std::endl;
         return;
     }
 
-    // Подтверждение успешной отправки
-    std::cout << "[INFO] Отправлены данные строкового типа: \"" << data << "\" (Размер: " << data.length() << " байт)" << std::endl;
+    std::cout << "[INFO] [" << method_name << "] Подготовка отправки данных серверу" << std::endl;
+
+    std::string packet = MessageProtocol::build(header, client_id, message_id, msg);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(10)); // пауза
+
+    size_t total_sent = 0;
+    while (total_sent < packet.size()) {
+        int sent_now = send(sock, packet.c_str() + total_sent, packet.size() - total_sent, 0);
+        if (sent_now <= 0) {
+            std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки серверу данных" << std::endl;
+            close_sock();
+            return;
+        }
+        total_sent += sent_now;
+    }
+
+    std::cout << "[INFO] [" << method_name << "] Успешно отправлено " << total_sent << " байт серверу " << std::endl;
 }
 std::vector<std::string> client::recv_vector()
 {
-    // Установка таймаута для приёма данных: 10 секунд
-    timeout.tv_sec = 10;
-    timeout.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
-
+    const std::string method_name = "client::recv_vector";
     std::vector<std::string> received_vector;
-    std::chrono::milliseconds duration(10); // Пауза между операциями (опционально)
 
-    // Получаем количество строк в векторе
-    uint32_t vec_size = 0;
-    std::this_thread::sleep_for(duration);
-
-    if (recv(sock, &vec_size, sizeof(vec_size), 0) <= 0)
-    {
-        std::cerr << "[ERROR] Ошибка при получении размера вектора" << std::endl;
-        close_sock();
-        debugger.show_error_information("Ошибка в recv_vector()", "Возможная причина - ошибка на стороне сервера при отправке размера вектора", "Логическая ошибка");
-        return received_vector; // Возвращаем пустой вектор в случае ошибки
+    // Получаем количество элементов в векторе через протокол
+    std::cout << "[INFO] [" << method_name << "] Ожидание заголовка FILE_COUNT..." << std::endl;
+    std::string count_str = recv_data("Ошибка при приеме количества файлов");
+    if (count_str.empty()) {
+        std::cerr << "[ERROR] [" << method_name << "] Не удалось получить количество элементов." << std::endl;
+        return received_vector;
     }
 
-    vec_size = ntohl(vec_size); // Переводим байты в порядок хоста (big endian -> little endian)
-    std::cout << "[INFO] Получен размер вектора: " << vec_size << " элементов" << std::endl;
+    int32_t vec_size = 0;
+    try {
+        vec_size = std::stoi(count_str);
+    } catch (const std::exception& e) {
+        std::cerr << "[ERROR] [" << method_name << "] Неверный формат размера вектора: " << count_str << std::endl;
+        return received_vector;
+    }
+    std::cout << "[INFO] [" << method_name << "] Получено FILE_COUNT = " << vec_size << std::endl;
 
-    // Принимаем строки по одной
-    for (uint32_t i = 0; i < vec_size; ++i)
+    // Принимаем каждую запись FILE_ENTRY
+    for (int32_t i = 0; i < vec_size; ++i)
     {
-        uint32_t str_size = 0;
-        std::this_thread::sleep_for(duration);
-
-        // Получаем длину очередной строки
-        if (recv(sock, &str_size, sizeof(str_size), 0) <= 0)
-        {
-            std::cerr << "[ERROR] Ошибка при получении размера строки #" << i + 1 << std::endl;
-            debugger.show_error_information("Ошибка в recv_vector()", "Возможная причина - ошибка на стороне сервера при отправке размера строки", "Логическая ошибка");
-            close_sock();
-            return received_vector;
+        std::cout << "[INFO] [" << method_name << "] Ожидание заголовка FILE_ENTRY #" << (i+1) << "..." << std::endl;
+        std::string entry = recv_data("Ошибка при приеме имени файла");
+        if (entry.empty()) {
+            std::cerr << "[ERROR] [" << method_name << "] Не удалось получить запись #" << (i+1) << std::endl;
+            break;
         }
-
-        str_size = ntohl(str_size); // Конвертируем размер строки из сетевого порядка байтов
-
-        std::this_thread::sleep_for(duration);
-
-        // Создаем буфер под строку и принимаем строку
-        std::unique_ptr<char[]> buffer(new char[str_size + 1]);
-
-        if (recv(sock, buffer.get(), str_size, 0) <= 0)
-        {
-            std::cerr << "[ERROR] Ошибка при получении строки #" << i + 1 << std::endl;
-            debugger.show_error_information("Ошибка в recv_vector()", "Возможная причина - ошибка на стороне сервера при отправке строки", "Логическая ошибка");
-            close_sock();
-            return received_vector;
-        }
-
-        buffer[str_size] = '\0'; // Добавляем терминальный символ конца строки
-
-        // Сохраняем строку в вектор
-        received_vector.emplace_back(buffer.get());
+        std::cout << "[INFO] [" << method_name << "] Получен FILE_ENTRY #" << (i+1) << ": " << entry << std::endl;
+        received_vector.push_back(entry);
     }
 
-    std::cout << "[INFO] Вектор успешно получен, количество строк: " << received_vector.size() << std::endl;
+    std::cout << "[INFO] [" << method_name << "] Вектор успешно собран, элементов: " << received_vector.size() << std::endl;
     return received_vector;
 }
+
 void client::print_vector(const std::vector<std::string> &vec)
 {
     // Если вектор пустой, сообщаем об этом и выходим
@@ -415,86 +384,81 @@ void client::print_vector(const std::vector<std::string> &vec)
 }
 int client::recv_file(std::string &file_path)
 {
-    // Устанавливаем таймаут на получение данных по сокету (10 секунд)
-    timeout.tv_sec = 10;
-    timeout.tv_usec = 0;
-    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
+    const std::string method_name = "client::recv_file";
 
-    // Открытие файла для бинарной записи
+    // Открываем файл для записи
     std::ofstream file(file_path, std::ios::binary);
     if (!file)
     {
-        std::cerr << "[ERROR] Ошибка открытия файла для записи!" << std::endl;
+        std::cerr << "[ERROR] [" << method_name << "] Ошибка открытия файла для записи: " << file_path << std::endl;
         return 1;
     }
 
-    // Получаем размер файла (8 байт, big-endian)
-    int64_t file_size_net = 0;
-    int received = recv(sock, &file_size_net, sizeof(file_size_net), MSG_WAITALL);
-    if (received != sizeof(file_size_net))
+    // Получаем из протокола размер файла (HEADER = "FILE_SIZE")
+    std::cout << "[INFO] [" << method_name << "] Ожидание HEADER=FILE_SIZE..." << std::endl;
+    std::string size_str = recv_data("Ошибка при приеме размера файла с сервера");
+    if (size_str.empty())
     {
-        std::cerr << "[ERROR] Не удалось получить размер файла!" << std::endl;
+        std::cerr << "[ERROR] [" << method_name << "] Не удалось получить размер файла." << std::endl;
         file.close();
-        debugger.show_error_information("Ошибка в recv_file()", "Не удалось открыть файл для записи", "Логическая ошибка");
         return 1;
     }
 
-    // Преобразуем размер файла в хост-байтовый порядок
-    int64_t file_size = be64toh(file_size_net);
-    std::cout << "[INFO] Размер файла к получению: " << file_size << " байт" << std::endl;
+    int64_t file_size = 0;
+    try {
+        file_size = std::stoll(size_str);
+    }
+    catch (const std::exception &e) {
+        std::cerr << "[ERROR] [" << method_name << "] Неверный формат размера файла: " << size_str << std::endl;
+        file.close();
+        return 1;
+    }
+    std::cout << "[INFO] [" << method_name << "] Размер файла к получению: " << file_size << " байт" << std::endl;
 
-    // Буфер фиксированного размера (128 КБ)
-    constexpr size_t BUFFER_SIZE = 262144;
-    std::vector<char> buffer(BUFFER_SIZE);
-
-    // Переменные для отслеживания прогресса
-    int64_t total_bytes_received = 0;
-    int block_count = 0;
-
-    // Основной цикл приёма данных
-    while (total_bytes_received < file_size)
+    // Принимаем чанки до HEADER = "FILE_END"
+    int64_t total_received = 0;
+    int block_index = 0;
+    while (true)
     {
-        // Сколько ещё байт нужно получить (но не больше размера буфера)
-        size_t to_receive = std::min(static_cast<int64_t>(BUFFER_SIZE), file_size - total_bytes_received);
-
-        // Получаем порцию данных
-        int bytes_received = recv(sock, buffer.data(), to_receive, 0);
-
-        // Ошибка получения
-        if (bytes_received < 0)
+        std::cout << "[INFO] [" << method_name << "] Ожидание следующего HEADER..." << std::endl;
+        std::string chunk = recv_data("Ошибка при приеме чанка файла");
+        if (chunk.empty())
         {
-            std::cerr << "[ERROR] Ошибка при получении данных!" << std::endl;
+            std::cerr << "[ERROR] [" << method_name << "] Ошибка при получении чанка файла." << std::endl;
             file.close();
-            debugger.show_error_information("Ошибка в recv_file()", "Возможная причина - ошибка на стороне сервера", "Логическая ошибка");
             return 1;
         }
 
-        // Сервер закрыл соединение раньше времени
-        if (bytes_received == 0)
+        // Признак конца передачи
+        if (chunk == "EOF")
         {
-            std::cerr << "[ERROR] Сервер преждевременно закрыл соединение!" << std::endl;
-            file.close();
-            debugger.show_error_information("Ошибка в recv_file()", "Сервер закрыл соединение в ходе передачи", "Логическая ошибка");
-            return 1;
+            std::cout << "[INFO] [" << method_name << "] Получен HEADER=FILE_END." << std::endl;
+            break;
         }
 
-        // Записываем данные в файл
-        file.write(buffer.data(), bytes_received);
-
-        // Обновляем количество полученных байт
-        total_bytes_received += bytes_received;
-
-        // Выводим прогресс
-        std::cout << "[INFO] Принят блок #" << ++block_count << ", размер: " << bytes_received << " байт" << std::endl;
-        std::cout << "[INFO] Принято данных: " << total_bytes_received << "/" << file_size << " байт" << std::endl;
+        // Записываем бинарные данные чанка
+        file.write(chunk.data(), chunk.size());
+        total_received += chunk.size();
+        std::cout << "[INFO] [" << method_name << "] Принят блок #" << block_index++
+                  << ", размер: " << chunk.size() << " байт (всего: " << total_received << "/" << file_size << ")" << std::endl;
     }
 
-    // Закрываем файл
     file.close();
-    std::cout << "[INFO] Файл успешно принят! Общий размер: " << total_bytes_received << " байт" << std::endl;
+
+    if (total_received != file_size)
+    {
+        std::cerr << "[WARN] [" << method_name << "] Получено байт " << total_received
+                  << ", ожидалось " << file_size << std::endl;
+    }
+    else
+    {
+        std::cout << "[INFO] [" << method_name << "] Файл успешно принят! Общий размер: "
+                  << total_received << " байт" << std::endl;
+    }
 
     return 0;
 }
+
 std::string client::hash_gen(std::string password)
 {
     // Создаем объект для алгоритма хэширования SHA256

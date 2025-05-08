@@ -94,7 +94,7 @@ int communicator::authentification(int client_socket,  std::string cl_id)
     }
 
     // Успешная аутентификация
-    send_data(client_socket, "OK", cl_id, msg_id, "Authentication successful");
+    send_data(client_socket, "OK", cl_id, msg_id, "Аутентификация успешна");
     log.write_log(log_location, method_name + " | Аутентификация успешна | ID: " + cl_id + " | IP: " + client_ip);
     std::cout << "[INFO] [" << method_name << "] Клиент [" << cl_id << "] успешно аутентифицирован" << std::endl;
 
@@ -342,13 +342,11 @@ std::string communicator::recv_data(int client_socket,  std::string error_msg)
         return "";
     }
 
-    std::string raw_data(buffer.data(), received_bytes);
-
-    log.write_log(log_location, method_name + " | Принято протокольное сообщение от клиента (ID: " + std::to_string(client_socket) + "): " + raw_data);
-    std::cout << "[INFO] [" << method_name << "] Принято сообщение: " << raw_data << std::endl;
-
     try {
+        std::string raw_data(buffer.data(), received_bytes);
+        log.write_log(log_location, method_name + " | Принято протокольное сообщение от клиента (ID: " + std::to_string(client_socket) + "): " + raw_data);
         MessageProtocol::ParsedMessage message = MessageProtocol::parse(raw_data);
+        std::cout << "[INFO] [" << method_name << "] Принято сообщение: " << message.message << std::endl;
         return message.message;  // Возвращаем только полезную нагрузку
     } catch (const std::exception& e) {
         log.write_log(log_location, method_name + " | Ошибка парсинга протокольного сообщения: " + std::string(e.what()));
@@ -371,26 +369,49 @@ void communicator::send_data(int client_socket, const std::string& header,
     log.write_log(log_location, method_name + " | Подготовка отправки данных клиенту (ID: " + std::to_string(client_socket) + ")");
     std::cout << "[INFO] [" << method_name << "] Подготовка отправки данных клиенту (ID: " << client_socket << ")" << std::endl;
 
+    // 1) формируем основной пакет с полезной нагрузкой
     std::string packet = MessageProtocol::build(header, client_id, message_id, msg);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(10)); // пауза
-
-    size_t total_sent = 0;
-    while (total_sent < packet.size()) {
-        int sent_now = send(client_socket, packet.c_str() + total_sent, packet.size() - total_sent, 0);
-        if (sent_now <= 0) {
-            log.write_log(log_location, method_name + " | Ошибка отправки данных после " +
-                          std::to_string(total_sent) + " байт клиенту (ID: " + std::to_string(client_socket) + ")");
-            std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки клиенту (ID: " << client_socket << ")" << std::endl;
+    // 2) формируем пакет LENGTH по протоколу, содержащий длину payload
+    std::string len_payload = std::to_string(packet.size());
+    std::string len_packet = MessageProtocol::build("LENGTH", client_id, message_id, len_payload);
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // отправляем пакет LENGTH целиком
+    size_t sent = 0;
+    const char* len_data = len_packet.data();
+    size_t len_size = len_packet.size();
+    while (sent < len_size) {
+        int n = ::send(client_socket, len_data + sent, len_size - sent, 0);
+        if (n <= 0) {
+            log.write_log(log_location, method_name + " | Ошибка отправки LENGTH после " + std::to_string(sent) + " байт");
+            std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки LENGTH, n=" << n << std::endl;
             close_sock(client_socket);
             return;
         }
-        total_sent += sent_now;
+        sent += n;
     }
 
-    log.write_log(log_location, method_name + " | Успешно отправлено " + std::to_string(total_sent) + " байт клиенту (ID: " + std::to_string(client_socket) + ")");
-    std::cout << "[INFO] [" << method_name << "] Успешно отправлено " << total_sent << " байт клиенту (ID: " << client_socket << ")" << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+
+    // 3) отправляем основной пакет целиком
+    sent = 0;
+    const char* data = packet.data();
+    size_t packet_size = packet.size();
+    while (sent < packet_size) {
+        int n = ::send(client_socket, data + sent, packet_size - sent, 0);
+        if (n <= 0) {
+            log.write_log(log_location, method_name + " | Ошибка отправки DATA после " + std::to_string(sent) + " байт");
+            std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки DATA, n=" << n << std::endl;
+            close_sock(client_socket);
+            return;
+        }
+        sent += n;
+    }
+
+    log.write_log(log_location, method_name + " | Успешно отправлено пакетов LENGTH и " + header + " клиенту (ID: " + std::to_string(client_socket) + ")");
+    std::cout << "[INFO] [" << method_name << "] Успешно отправлено пакетов LENGTH и " << header << " клиенту (ID: " << client_socket << ")" << std::endl;
 }
+
 void communicator::close_sock(int client_socket)
 {
     const std::string method_name = "close_sock";
@@ -485,7 +506,7 @@ int communicator::send_file(int client_socket, std::string& file_path)
         std::string data_chunk(buffer.data(), bytes_read);
         msg_id = MessageProtocol::generateMessageID();
         send_data(client_socket, "FILE_CHUNK", "server", msg_id, data_chunk);
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
         total_bytes_sent += bytes_read;
         std::cout << "[INFO] [" << method_name << "] Отправлен блок #" << block_index++

@@ -13,6 +13,7 @@
 #include <netinet/in.h>
 #include <random>
 #include <chrono>
+#include <algorithm>
 #include <thread>
 #include <limits>
 #include "show_error.h"
@@ -24,6 +25,7 @@
 #include <cryptopp/filters.h>
 #include <cryptopp/osrng.h>
 #include <iomanip>
+#include "protocol.h"
 class client {
     private:
         show_error debugger;
@@ -34,7 +36,7 @@ class client {
         std::string ip;
         struct sockaddr_in serverAddr;
         socklen_t addr_size;
-        size_t buflen = 1024;
+        int buflen = 65600;
         std::unique_ptr<char[]> buffer{new char[buflen]};
         uint port;
         uint op;
@@ -45,8 +47,8 @@ class client {
         int sock;
         std::vector <std::string> files;
         void connect_to_server();
-        void send_data(std::string data);
-        std::string recv_data();
+        void send_data(const std::string& header, const std::string& client_id, int message_id, const std::string& msg);
+        std::string recv_data(std::string error_msg);
         void close_sock();
         void start();
         void work(UI &intf);

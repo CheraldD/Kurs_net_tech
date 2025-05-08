@@ -34,12 +34,13 @@ private:
     struct sockaddr_in serverAddr, clientAddr;
     socklen_t addr_size;
     std::string base_location;
-    size_t buflen = 1024;
+    size_t buflen = 65536;
     std::unique_ptr<char[]> buffer{new char[buflen]};
     uint p;
     std::string digits[16] = {"0","1","2","3","4","5","6","7","8","9","A","B","C","D","E","F"};
 
 public:
+
     int serverSocket;
     logger log;
     std::string cl_id, log_location;
