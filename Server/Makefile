@@ -1,6 +1,6 @@
 .PHONY: all doxy clean
 CXX = g++
-CXXFLAGS = -Wall -lboost_program_options -lcrypto++ -lboost_filesystem -fPIC
+CXXFLAGS = -Wall -lboost_program_options -lcrypto++ -lboost_filesystem -fPIC -fsanitize=address
 QT_CFLAGS = $(shell pkg-config --cflags Qt5Core Qt5Sql)
 QT_LIBS = $(shell pkg-config --libs Qt5Core Qt5Sql)
 TARGET = server

@@ -1,6 +1,6 @@
 #include "communicator.h"
 
-int communicator::connect_to_cl(int &new_socket)
+int communicator::connect_to_cl(int &new_socket, sockaddr_in &out_clientAddr)
 {
     const std::string method_name = "connect_to_cl";
 
@@ -12,10 +12,8 @@ int communicator::connect_to_cl(int &new_socket)
     }
 
     log.write_log(log_location, method_name + " | Ожидание подключения клиента...");
-    addr_size = sizeof(clientAddr);
-
-    // Принятие подключения клиента
-    new_socket = accept(serverSocket, (struct sockaddr *)&clientAddr, &addr_size);
+    addr_size = sizeof(out_clientAddr);
+    new_socket = accept(serverSocket, (struct sockaddr *)&out_clientAddr, &addr_size);
     if (new_socket < 0)
     {
         log.write_log(log_location, method_name + " | Ошибка принятия соединения");
@@ -171,7 +169,8 @@ void communicator::work()
     {
         int new_socket;
         // Ожидаем подключения клиента
-        int result = connect_to_cl(new_socket);
+        sockaddr_in client_addr;
+        int result = connect_to_cl(new_socket, client_addr);
 
         if (result == 0)
         {
@@ -180,7 +179,7 @@ void communicator::work()
             std::cout << "[INFO] [" << method_name << "] Принято новое подключение. Запуск потока обработки клиента." << std::endl;
 
             // Создаем новый поток для обработки клиента и сразу его отсоединяем (поток работает независимо)
-            std::thread client_thread(&communicator::handle_client, this, new_socket);
+            std::thread client_thread(&communicator::handle_client, this, new_socket, client_addr);
             client_thread.detach();
         }
         else
@@ -191,7 +190,7 @@ void communicator::work()
         }
     }
 }
-void communicator::handle_client(int client_socket)
+void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
 {
     const std::string method_name = "handle_client";
 
