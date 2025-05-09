@@ -390,7 +390,7 @@ void communicator::send_data(int client_socket, const std::string& header,
         sent += n;
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
 
     // 3) отправляем основной пакет целиком
     sent = 0;
@@ -505,7 +505,7 @@ int communicator::send_file(int client_socket, std::string& file_path)
         std::string data_chunk(buffer.data(), bytes_read);
         msg_id = MessageProtocol::generateMessageID();
         send_data(client_socket, "FILE_CHUNK", "server", msg_id, data_chunk);
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        //std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
         total_bytes_sent += bytes_read;
         std::cout << "[INFO] [" << method_name << "] Отправлен блок #" << block_index++
