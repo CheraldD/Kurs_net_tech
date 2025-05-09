@@ -49,16 +49,16 @@ public:
     communicator(uint port,std::string log_loc);
     
     int connect_to_cl(int &new_socket, sockaddr_in &out_clientAddr);
-    void send_data(int client_socket, const std::string& header, const std::string& client_id, int message_id, const std::string& msg);
+    int send_data(int client_socket, const std::string& header, const std::string& client_id, int message_id, const std::string& msg);
     std::string recv_data(int client_socket, std::string messg);
     void close_sock(int sock); 
     void work();
     void start();
-    void send_file_list(int client_socket);
+    int send_file_list(int client_socket);
     int send_file(int client_socket, std::string& file_path);
     int file_exchange(int client_socket);
     int authentification(int client_socket, std::string cl_id);
-    void registration(int client_socket, std::string cl_id);
+    int registration(int client_socket, std::string cl_id);
     void handle_client(int client_socket, sockaddr_in clientAddr);
     std::string hash_gen(std::string &password);
 };

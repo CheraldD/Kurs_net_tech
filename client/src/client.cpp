@@ -92,6 +92,7 @@ void client::client_reg()
 
     if (answ != "Регистрация успешна")
     {
+        std::cout << "[ERROR] [" << method_name << "] Флаг ошибки: " << answ << std::endl;
         close_sock();
         debugger.show_error_information("Ошибка в client_reg()", "Возможная причина - ошибка запроса к БД на сервере", "Логическая ошибка");
         exit(1);
@@ -223,7 +224,7 @@ std::string client::recv_data(std::string error_msg)
     std::vector<char> len_buf(buflen);
     int len_bytes = recv(sock, len_buf.data(), buflen, 0);
     if (len_bytes <= 0) {
-        close_sock();
+        //close_sock();
         std::cerr << "[ERROR] [" << method_name << "] " << error_msg << " (LENGTH)" << std::endl;
         return "";
     }
@@ -252,7 +253,7 @@ std::string client::recv_data(std::string error_msg)
         int to_read = std::min(buflen, payload_size - total);
         int r = recv(sock, len_buf.data(), to_read, 0);
         if (r <= 0) {
-            close_sock();
+            //close_sock();
             std::cerr << "[ERROR] [" << method_name << "] " << error_msg << " (DATA)" << std::endl;
             return "";
         }
@@ -397,9 +398,9 @@ int client::recv_file(std::string &file_path)
     // Получаем из протокола размер файла (HEADER = "FILE_SIZE")
     std::cout << "[INFO] [" << method_name << "] Ожидание HEADER=FILE_SIZE..." << std::endl;
     std::string size_str = recv_data("Ошибка при приеме размера файла с сервера");
-    if (size_str.empty())
+    if (size_str.empty() or size_str=="Файл не найден")
     {
-        std::cerr << "[ERROR] [" << method_name << "] Не удалось получить размер файла." << std::endl;
+        std::cerr << "[ERROR] [" << method_name << "] Не удалось получить размер файла." <<"Флаг ошибки: "<< size_str<< std::endl;
         file.close();
         return 1;
     }
