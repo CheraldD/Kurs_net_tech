@@ -10,7 +10,7 @@ int communicator::connect_to_cl(int &new_socket, sockaddr_in &out_clientAddr)
         log.write_log(log_location, method_name + " | Ошибка при прослушивании порта");
         throw critical_error("Сервер не встал на прослушку");
     }
-
+    std::cout << "[INFO] [" << method_name << "] Ожидание подключения клиента"<< std::endl;
     log.write_log(log_location, method_name + " | Ожидание подключения клиента...");
     addr_size = sizeof(out_clientAddr);
     new_socket = accept(serverSocket, (struct sockaddr *)&out_clientAddr, &addr_size);
@@ -26,7 +26,7 @@ int communicator::connect_to_cl(int &new_socket, sockaddr_in &out_clientAddr)
     inet_ntop(AF_INET, &(out_clientAddr.sin_addr), client_ip, INET_ADDRSTRLEN);
     int client_port = ntohs(out_clientAddr.sin_port);
     log.write_log(log_location, method_name + " | Подключен клиент | IP: " + std::string(client_ip) + " | Порт: " + std::to_string(client_port));
-
+    
     return 0;
 }
 
@@ -305,6 +305,7 @@ int communicator::file_exchange(int client_socket)
 
     while (true)
     {
+        std::cout << "[INFO] [" << method_name << "] Ожидание пути файла от  (ID: " << client_socket << ")" << std::endl;
         // Получение пути к запрашиваемому файлу от клиента
         std::string path = recv_data(client_socket, "Ошибка при принятии пути к запрашиваемому файлу");
 
@@ -320,14 +321,21 @@ int communicator::file_exchange(int client_socket)
         // Логируем полученный путь к файлу
         log.write_log(log_location, method_name + " | Получен путь к файлу от клиента (ID: " + std::to_string(client_socket) + "): " + path);
         std::cout << "[INFO] [" << method_name << "] Получен путь к файлу от клиента (ID: " << client_socket << "): " << path << std::endl;
-
+        int file_send=send_file(client_socket, path);
         // Отправка запрашиваемого файла клиенту
-        if (send_file(client_socket, path) == 1)
+        if (file_send == 1)
         {
             log.write_log(log_location, method_name + " | Ошибка при отправке файла клиенту (ID: " + std::to_string(client_socket) + ")");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка при отправке файла клиенту (ID: " << client_socket << ")" << std::endl;
             //close_sock(client_socket);
             return 1;
+        }
+        if (file_send == 2)
+        {
+            log.write_log(log_location, method_name + " | Ошибка при отправке файла клиенту. Не удалось открыть файл или файл не найден (ID: " + std::to_string(client_socket) + ")");
+            std::cerr << "[ERROR] [" << method_name << "] Ошибка при отправке файла клиенту. Не удалось открыть файл или файл не найден (ID: " << client_socket << ")" << std::endl;
+            //close_sock(client_socket);
+            continue;
         }
     }
 
@@ -394,7 +402,7 @@ int communicator::send_data(int client_socket, const std::string& header,
     while (sent < len_size) {
         int n = send(client_socket, len_data + sent, len_size - sent, MSG_NOSIGNAL);
         if (n <= 0) {
-            log.write_log(log_location, method_name + " | Ошибка отправки LENGTH после " + std::to_string(sent) + " байт");
+            log.write_log(log_location, method_name + " | Ошибка отправки LENGTH" + std::to_string(sent) + " байт");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки LENGTH, n=" << n << std::endl;
             //close_sock(client_socket);
             return 1;
@@ -489,18 +497,21 @@ int communicator::send_file(int client_socket, std::string& file_path)
         log.write_log(log_location, method_name + " | Файл не найден: " + file_path);
         std::cerr << "[ERROR] [" << method_name << "] Файл не найден: " << file_path << std::endl;
         if(send_data(client_socket, "FILE_ERR", "server", msg_id, "Файл не найден")==1){
-            return 1;
+            return 2;
         }
         //close_sock(client_socket);
-        return 1;
+        return 2;
     }
 
     std::ifstream file(file_path, std::ios::binary | std::ios::ate);
     if (!file) {
         log.write_log(log_location, method_name + " | Ошибка открытия файла: " + file_path);
         std::cerr << "[ERROR] [" << method_name << "] Ошибка открытия файла: " << file_path << std::endl;
+        if(send_data(client_socket, "FILE_ERR", "server", msg_id, "Ошибка открытия файла")==1){
+            return 2;
+        }
        // close_sock(client_socket);
-        return 1;
+        return 2;
     }
 
     std::streamsize file_size = file.tellg();

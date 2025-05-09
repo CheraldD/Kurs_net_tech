@@ -398,7 +398,7 @@ int client::recv_file(std::string &file_path)
     // Получаем из протокола размер файла (HEADER = "FILE_SIZE")
     std::cout << "[INFO] [" << method_name << "] Ожидание HEADER=FILE_SIZE..." << std::endl;
     std::string size_str = recv_data("Ошибка при приеме размера файла с сервера");
-    if (size_str.empty() or size_str=="Файл не найден")
+    if (size_str.empty() or size_str=="Файл не найден" or size_str=="Ошибка открытия файла")
     {
         std::cerr << "[ERROR] [" << method_name << "] Не удалось получить размер файла." <<"Флаг ошибки: "<< size_str<< std::endl;
         file.close();
