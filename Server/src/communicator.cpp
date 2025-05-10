@@ -188,10 +188,11 @@ void communicator::work()
             std::cerr << "[ERROR] [" << method_name << "] Ошибка подключения клиента, продолжаем ожидание..." << std::endl;
             continue;
         }
-
+        int prev = active_clients.fetch_add(1);
         // Проверяем, есть ли свободный слот
-        if (active_clients.load() >= 3)
+        if (prev >= 3)
         {
+            active_clients.fetch_sub(1);
             send_data(new_socket, "CONN_ERR", "server", -1, "Сервер полон");
             close_sock(new_socket);
 
@@ -212,7 +213,7 @@ void communicator::work()
 void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
 {
     const std::string method_name = "handle_client";
-    active_clients.fetch_add(1);
+    //active_clients.fetch_add(1);
     try
     {
         // Получаем ID клиента
@@ -238,9 +239,11 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
             log.write_log(log_location, method_name + " | Регистрация нового клиента | ID: " + cl_id + " | IP: " + client_ip);
             if (registration(client_socket, cl_id) == 1)
             {
+                active_clients.fetch_sub(1);
                 return;
             }
             close_sock(client_socket);
+            active_clients.fetch_sub(1);
             return;
         }
         else
@@ -249,6 +252,7 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
             if (authentification(client_socket, cl_id) == 0)
             {
                 log.write_log(log_location, method_name + " | Аутентификация не пройдена | ID: " + cl_id + " | IP: " + client_ip);
+                active_clients.fetch_sub(1);
                 return;
             }
             std::cout << "[INFO] [" << method_name << "] Успешная аутентификация клиента: " << cl_id << std::endl;
@@ -259,6 +263,7 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
         log.write_log(log_location, method_name + " | Начата передача файлов | ID: " + cl_id + " | IP: " + client_ip);
         if (file_exchange(client_socket) == 1)
         {
+            active_clients.fetch_sub(1);
             close_sock(client_socket);
             return;
         }
@@ -269,7 +274,7 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
         // Логируем и выводим ошибку при исключении
         log.write_log(log_location, method_name + " | Критическая ошибка обработки клиента: " + std::string(e.what()));
         std::cerr << "[ERROR] [" << method_name << "] Исключение при обработке клиента: " << e.what() << std::endl;
-
+        active_clients.fetch_sub(1);
         close_sock(client_socket);
     }
 }
@@ -465,12 +470,12 @@ void communicator::close_sock(int client_socket)
     // Логируем разрыв соединения
     log.write_log(log_location, method_name + " | Разорвано соединение с клиентом (ID: " + std::to_string(client_socket) + ")");
     std::cout << "[INFO] [" << method_name << "] Разорвано соединение с клиентом (ID: " << client_socket << ")" << std::endl;
-    int before = active_clients.fetch_sub(1);
-    if (before <= 0)
+    //int before = active_clients.fetch_sub(1);
+    /*if (before <= 0)
     {
         log.write_log(log_location, "close_sock | Предупреждение: число активных клиентов стало меньше нуля");
         active_clients.store(0); // аварийное восстановление
-    }
+    }*/
     // Закрытие сокета
     close(client_socket);
 
