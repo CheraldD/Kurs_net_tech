@@ -1,11 +1,13 @@
-#include "ui.h"
-#include "communicator.h"
-#include "logger.h"
-#include "error.h"
+#include <QApplication>
+#include "serverwindow.h"
+#include "base.h"
+#include "protocol.h"
+#include "data_handler.h"
+
 int main(int argc, char* argv[])
 {
-    UI interface (argc,argv);
-    communicator server (interface.get_port(),interface.get_log_loc());
-    server.work();
-    return 0;
+    QApplication app(argc, argv);
+    ServerWindow w;
+    w.show();
+    return app.exec();
 }

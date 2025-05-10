@@ -26,6 +26,7 @@ int communicator::connect_to_cl(int &new_socket, sockaddr_in &out_clientAddr)
     inet_ntop(AF_INET, &(out_clientAddr.sin_addr), client_ip, INET_ADDRSTRLEN);
     int client_port = ntohs(out_clientAddr.sin_port);
     log.write_log(log_location, method_name + " | Подключен клиент | IP: " + std::string(client_ip) + " | Порт: " + std::to_string(client_port));
+    emit clientConnected(QString::fromStdString(client_ip), QString::number(new_socket));
 
     return 0;
 }
@@ -34,18 +35,16 @@ int communicator::authentification(int client_socket, std::string cl_id)
 {
     const std::string method_name = "authentification";
 
-    // Проверка валидности сокета
     if (client_socket < 0)
     {
         log.write_log(log_location, method_name + " | Некорректный сокет клиента");
         std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
+        emit clientAuthenticated(QString::fromStdString(cl_id), false);
         return 0;
     }
 
-    // Генерация уникального ID сообщения
     int msg_id = MessageProtocol::generateMessageID();
 
-    // Получаем IP клиента
     sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
     if (getpeername(client_socket, reinterpret_cast<struct sockaddr *>(&addr), &addr_len) < 0)
@@ -58,34 +57,31 @@ int communicator::authentification(int client_socket, std::string cl_id)
     log.write_log(log_location, method_name + " | Начата аутентификация клиента | ID: " + cl_id + " | IP: " + client_ip);
     std::cout << "[INFO] [" << method_name << "] Аутентификация клиента [" << cl_id << "] с IP " << client_ip << std::endl;
 
-    // Проверка существования пользователя
     if (db.selectUserByName(cl_id) == 0)
     {
         log.write_log(log_location, method_name + " | Клиент не найден в базе | ID: " + cl_id);
         send_data(client_socket, "UERR", cl_id, msg_id, "UERR");
         close_sock(client_socket);
+        emit clientAuthenticated(QString::fromStdString(cl_id), false);
         return 0;
     }
 
-    // Получение ожидаемых данных из БД
     std::string cl_passw_base = db.getCurrentHashedPassword();
     std::string cl_ip_base = db.getCurrentIP();
 
-    // Приём пароля и IP от клиента
     std::string cl_passw_recv = recv_data(client_socket, "Ошибка при приеме пароля");
     std::string cl_ip_recv = recv_data(client_socket, "Ошибка при приеме IP");
 
-    // Проверка пароля
     if (cl_passw_base != cl_passw_recv)
     {
         log.write_log(log_location, method_name + " | Неверный пароль | ID: " + cl_id);
         std::cerr << "[WARN] [" << method_name << "] Неверный пароль клиента [" << cl_id << "]" << std::endl;
         send_data(client_socket, "PERR", cl_id, msg_id, "PERR");
         close_sock(client_socket);
+        emit clientAuthenticated(QString::fromStdString(cl_id), false);
         return 0;
     }
 
-    // Проверка IP-адреса
     if (cl_ip_base != cl_ip_recv)
     {
         log.write_log(log_location, method_name + " | Несовпадение IP-адреса | ID: " + cl_id +
@@ -93,13 +89,14 @@ int communicator::authentification(int client_socket, std::string cl_id)
         std::cerr << "[WARN] [" << method_name << "] IP клиента не совпадает с базой [" << cl_id << "]" << std::endl;
         send_data(client_socket, "IERR", cl_id, msg_id, "IERR");
         close_sock(client_socket);
+        emit clientAuthenticated(QString::fromStdString(cl_id), false);
         return 0;
     }
 
-    // Успешная аутентификация
     send_data(client_socket, "OK", cl_id, msg_id, "Аутентификация успешна");
     log.write_log(log_location, method_name + " | Аутентификация успешна | ID: " + cl_id + " | IP: " + client_ip);
     std::cout << "[INFO] [" << method_name << "] Клиент [" << cl_id << "] успешно аутентифицирован" << std::endl;
+    emit clientAuthenticated(QString::fromStdString(cl_id), true);
 
     return 1;
 }
@@ -108,18 +105,16 @@ int communicator::registration(int client_socket, std::string cl_id)
 {
     const std::string method_name = "registration";
 
-    // Проверка валидности сокета
     if (client_socket < 0)
     {
         log.write_log(log_location, method_name + " | Некорректный сокет клиента");
         std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
+        emit clientRegistered(QString::fromStdString(cl_id), false);
         return 1;
     }
 
-    // Генерация уникального ID сообщения
     int msg_id = MessageProtocol::generateMessageID();
 
-    // Получаем IP клиента
     sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
     if (getpeername(client_socket, reinterpret_cast<struct sockaddr *>(&addr), &addr_len) < 0)
@@ -133,33 +128,33 @@ int communicator::registration(int client_socket, std::string cl_id)
     log.write_log(log_location, method_name + " | Начата регистрация клиента | ID: " + cl_id + " | IP: " + client_ip_str);
     std::cout << "[INFO] [" << method_name << "] Регистрация клиента [" << cl_id << "] с IP " << client_ip_str << std::endl;
 
-    // Получаем пароль от клиента
     std::string password = recv_data(client_socket, "Ошибка при приеме пароля");
     if (password.empty())
     {
         log.write_log(log_location, method_name + " | Не получен пароль клиента | ID: " + cl_id + " | IP: " + client_ip_str);
         std::cerr << "[ERROR] [" << method_name << "] Не удалось получить пароль от клиента [" << cl_id << "]" << std::endl;
         close_sock(client_socket);
+        emit clientRegistered(QString::fromStdString(cl_id), false);
         return 1;
     }
 
-    // Вставляем нового пользователя в базу данных
     if (db.insertUser(cl_id, password, client_ip_str) == false)
     {
         send_data(client_socket, "REG_OK", cl_id, msg_id, "Ошибка регистрации");
         close_sock(client_socket);
         std::cout << "[INFO] [" << method_name << "] Регистрация клиента [" << cl_id << "] не завершена, ошибка при запросе к БД" << std::endl;
+        emit clientRegistered(QString::fromStdString(cl_id), false);
         return 1;
     }
 
-    // Отправляем клиенту протокольное сообщение об успешной регистрации
     send_data(client_socket, "REG_OK", cl_id, msg_id, "Регистрация успешна");
 
     log.write_log(log_location, method_name + " | Регистрация завершена успешно | ID: " + cl_id + " | IP: " + client_ip_str);
     std::cout << "[INFO] [" << method_name << "] Регистрация клиента [" << cl_id << "] завершена успешно" << std::endl;
+    emit clientRegistered(QString::fromStdString(cl_id), true);
 
-    // Закрываем соединение
     close_sock(client_socket);
+    return 0;
 }
 
 communicator::communicator(uint port, std::string log_loc)
@@ -173,6 +168,7 @@ void communicator::work()
     const std::string method_name = "work";
     log.write_log(log_location, method_name + " | Запуск основного цикла сервера");
     std::cout << "[INFO] [" << method_name << "] Сервер запущен и ожидает подключения клиентов..." << std::endl;
+    emit logEvent(QString::fromStdString(method_name), "Server started and listening");
 
     start();
 
@@ -186,6 +182,7 @@ void communicator::work()
         {
             log.write_log(log_location, method_name + " | Ошибка при подключении клиента");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка подключения клиента, продолжаем ожидание..." << std::endl;
+            emit logEvent(QString::fromStdString(method_name), "Connection attempt failed");
             continue;
         }
         int prev = active_clients.fetch_add(1);
@@ -198,34 +195,35 @@ void communicator::work()
 
             log.write_log(log_location, method_name + " | Отклонено подключение: очередь заполнена");
             std::cout << "[INFO] [" << method_name << "] Отклонено новое подключение: очередь заполнена." << std::endl;
+            emit logEvent(QString::fromStdString(method_name), "Connection rejected: server full");
             continue;
         }
         send_data(new_socket, "CONN_OK", "server", -1, "Подключение успешно");
-        // Логируем успешное подключение клиента и создание потока
         log.write_log(log_location, method_name + " | Подключение клиента принято, создаётся поток для обработки");
         std::cout << "[INFO] [" << method_name << "] Принято новое подключение. Запуск потока обработки клиента." << std::endl;
+        emit logEvent(QString::fromStdString(method_name), "Connection accepted, spawning client thread");
 
         // Создаем поток
         std::thread client_thread(&communicator::handle_client, this, new_socket, client_addr);
         client_thread.detach();
     }
 }
+
 void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
 {
     const std::string method_name = "handle_client";
-    //active_clients.fetch_add(1);
     try
     {
         // Получаем ID клиента
         std::string cl_id = recv_data(client_socket, method_name + " | Ошибка при приеме ID клиента");
         std::string operation_type = recv_data(client_socket, method_name + " | Ошибка при приеме типа операции");
+        emit messageReceived(QString::fromStdString(cl_id), QString::fromStdString(operation_type));
 
         // Получаем IP клиента
         char ip_buf[INET_ADDRSTRLEN];
         inet_ntop(AF_INET, &(clientAddr.sin_addr), ip_buf, INET_ADDRSTRLEN);
         std::string client_ip = ip_buf;
 
-        // Логируем подключение клиента
         log.write_log(log_location, method_name + " | Установлено соединение с клиентом | ID: " + cl_id + " | IP: " + client_ip);
         std::cout << "[INFO] [" << method_name << "] Подключение от клиента: ID = " << cl_id << ", IP = " << client_ip << std::endl;
 
@@ -240,10 +238,12 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
             if (registration(client_socket, cl_id) == 1)
             {
                 active_clients.fetch_sub(1);
+               // emit clientDisconnected(QString::fromStdString(cl_id));
                 return;
             }
             close_sock(client_socket);
             active_clients.fetch_sub(1);
+           // emit clientDisconnected(QString::fromStdString(cl_id));
             return;
         }
         else
@@ -253,6 +253,7 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
             {
                 log.write_log(log_location, method_name + " | Аутентификация не пройдена | ID: " + cl_id + " | IP: " + client_ip);
                 active_clients.fetch_sub(1);
+              //  emit clientDisconnected(QString::fromStdString(cl_id));
                 return;
             }
             std::cout << "[INFO] [" << method_name << "] Успешная аутентификация клиента: " << cl_id << std::endl;
@@ -261,21 +262,24 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
 
         // Передача файлов
         log.write_log(log_location, method_name + " | Начата передача файлов | ID: " + cl_id + " | IP: " + client_ip);
+        emit logEvent(QString::fromStdString(method_name), "File exchange started for " + QString::fromStdString(cl_id));
         if (file_exchange(client_socket) == 1)
         {
             active_clients.fetch_sub(1);
             close_sock(client_socket);
+           // emit clientDisconnected(QString::fromStdString(cl_id));
             return;
         }
         active_clients.fetch_sub(1);
+        close_sock(client_socket);
     }
     catch (const std::exception &e)
     {
-        // Логируем и выводим ошибку при исключении
         log.write_log(log_location, method_name + " | Критическая ошибка обработки клиента: " + std::string(e.what()));
         std::cerr << "[ERROR] [" << method_name << "] Исключение при обработке клиента: " << e.what() << std::endl;
         active_clients.fetch_sub(1);
         close_sock(client_socket);
+        emit logEvent(QString::fromStdString(method_name), "Exception: " + QString::fromStdString(e.what()));
     }
 }
 
@@ -283,36 +287,36 @@ void communicator::start()
 {
     const std::string method_name = "start";
 
-    // Создание сокета для сервера
     serverSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (serverSocket < 0)
     {
         log.write_log(log_location, method_name + " | Ошибка при создании сокета");
         std::cerr << "[ERROR] [" << method_name << "] Ошибка при создании сокета" << std::endl;
+        emit logEvent(QString::fromStdString(method_name), "Socket creation failed");
         throw critical_error("Сокет не был создан");
     }
+    emit logEvent(QString::fromStdString(method_name), "Socket created");
 
-    // Логируем успешное создание сокета
     log.write_log(log_location, method_name + " | Сокет для сервера создан");
     std::cout << "[INFO] [" << method_name << "] Сокет создан" << std::endl;
 
-    // Настройка структуры адреса для привязки
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(p);          // Устанавливаем порт
-    serverAddr.sin_addr.s_addr = INADDR_ANY; // Принимаем соединения с любого IP
+    serverAddr.sin_port = htons(p);
+    serverAddr.sin_addr.s_addr = INADDR_ANY;
 
-    // Привязка сокета к адресу
     if (bind(serverSocket, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0)
     {
         log.write_log(log_location, method_name + " | Ошибка при привязке сокета");
         std::cerr << "[ERROR] [" << method_name << "] Ошибка при привязке сокета" << std::endl;
+        emit logEvent(QString::fromStdString(method_name), "Socket bind failed");
         throw critical_error("Сокет не был привязан");
     }
+    emit logEvent(QString::fromStdString(method_name), "Socket bound");
 
-    // Логируем успешную привязку сокета
     log.write_log(log_location, method_name + " | Сокет привязан");
     std::cout << "[INFO] [" << method_name << "] Сокет привязан" << std::endl;
 }
+
 int communicator::file_exchange(int client_socket)
 {
     const std::string method_name = "file_exchange";
@@ -320,6 +324,7 @@ int communicator::file_exchange(int client_socket)
     // Логируем начало обмена файлами с клиентом
     log.write_log(log_location, method_name + " | Начало обмена файлами с клиентом (ID: " + std::to_string(client_socket) + ")");
     std::cout << "[INFO] [" << method_name << "] Начало обмена файлами с клиентом (ID: " << client_socket << ")" << std::endl;
+    emit logEvent(QString::fromStdString(method_name), "File exchange started for socket " + QString::number(client_socket));
 
     // Отправка списка файлов клиенту
     if (send_file_list(client_socket) == 1)
@@ -332,13 +337,13 @@ int communicator::file_exchange(int client_socket)
         std::cout << "[INFO] [" << method_name << "] Ожидание пути файла от  (ID: " << client_socket << ")" << std::endl;
         // Получение пути к запрашиваемому файлу от клиента
         std::string path = recv_data(client_socket, "Ошибка при принятии пути к запрашиваемому файлу");
+        emit messageReceived(QString::number(client_socket), QString::fromStdString(path));
 
         // Проверка, если путь пустой (клиент закрыл соединение или ошибка)
         if (path.empty())
         {
             log.write_log(log_location, method_name + " | Ошибка при приеме имени файла от клиента или клиент закрыл соединение (ID: " + std::to_string(client_socket) + ")");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка при приеме имени файла от клиента/клиент закрыл соединение (ID: " << client_socket << ")" << std::endl;
-            // close_sock(client_socket);
             return 1;
         }
 
@@ -351,20 +356,20 @@ int communicator::file_exchange(int client_socket)
         {
             log.write_log(log_location, method_name + " | Ошибка при отправке файла клиенту (ID: " + std::to_string(client_socket) + ")");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка при отправке файла клиенту (ID: " << client_socket << ")" << std::endl;
-            // close_sock(client_socket);
             return 1;
         }
         if (file_send == 2)
         {
             log.write_log(log_location, method_name + " | Ошибка при отправке файла клиенту. Не удалось открыть файл или файл не найден (ID: " + std::to_string(client_socket) + ")");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка при отправке файла клиенту. Не удалось открыть файл или файл не найден (ID: " << client_socket << ")" << std::endl;
-            // close_sock(client_socket);
             continue;
         }
+        emit fileSent(QString::number(client_socket), QString::fromStdString(path));
     }
 
     return 0;
 }
+
 std::string communicator::recv_data(int client_socket, std::string error_msg)
 {
     const std::string method_name = "recv_data";
@@ -382,6 +387,7 @@ std::string communicator::recv_data(int client_socket, std::string error_msg)
         close_sock(client_socket);
         log.write_log(log_location, method_name + " | Ошибка или закрыто соединение: " + error_msg);
         std::cerr << "[ERROR] [" << method_name << "] " << error_msg << std::endl;
+        //emit clientDisconnected(QString::number(client_socket));
         return "";
     }
 
@@ -391,15 +397,18 @@ std::string communicator::recv_data(int client_socket, std::string error_msg)
         log.write_log(log_location, method_name + " | Принято протокольное сообщение от клиента (ID: " + std::to_string(client_socket) + "): " + raw_data);
         MessageProtocol::ParsedMessage message = MessageProtocol::parse(raw_data);
         std::cout << "[INFO] [" << method_name << "] Принято сообщение: " << message.message << std::endl;
+       // emit messageReceived(QString::number(client_socket), QString::fromStdString(message.message));
         return message.message; // Возвращаем только полезную нагрузку
     }
     catch (const std::exception &e)
     {
         log.write_log(log_location, method_name + " | Ошибка парсинга протокольного сообщения: " + std::string(e.what()));
         std::cerr << "[ERROR] [" << method_name << "] Ошибка парсинга: " << e.what() << std::endl;
+        emit logEvent(QString::fromStdString(method_name), QString::fromStdString(e.what()));
         return "";
     }
 }
+
 int communicator::send_data(int client_socket, const std::string &header,
                             const std::string &client_id, int message_id,
                             const std::string &msg)
@@ -434,7 +443,6 @@ int communicator::send_data(int client_socket, const std::string &header,
         {
             log.write_log(log_location, method_name + " | Ошибка отправки LENGTH" + std::to_string(sent) + " байт");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки LENGTH, n=" << n << std::endl;
-            // close_sock(client_socket);
             return 1;
         }
         sent += n;
@@ -453,7 +461,6 @@ int communicator::send_data(int client_socket, const std::string &header,
         {
             log.write_log(log_location, method_name + " | Ошибка отправки DATA после " + std::to_string(sent) + " байт");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки DATA, n=" << n << std::endl;
-            // close_sock(client_socket);
             return 1;
         }
         sent += n;
@@ -461,6 +468,8 @@ int communicator::send_data(int client_socket, const std::string &header,
 
     log.write_log(log_location, method_name + " | Успешно отправлено пакетов LENGTH и " + header + " клиенту (ID: " + std::to_string(client_socket) + ")");
     std::cout << "[INFO] [" << method_name << "] Успешно отправлено пакетов LENGTH и " << header << " клиенту (ID: " << client_socket << ")" << std::endl;
+    emit messageSent(QString::fromStdString(client_id), QString::fromStdString(header), QString::fromStdString(msg));
+    return 0;
 }
 
 void communicator::close_sock(int client_socket)
@@ -470,14 +479,8 @@ void communicator::close_sock(int client_socket)
     // Логируем разрыв соединения
     log.write_log(log_location, method_name + " | Разорвано соединение с клиентом (ID: " + std::to_string(client_socket) + ")");
     std::cout << "[INFO] [" << method_name << "] Разорвано соединение с клиентом (ID: " << client_socket << ")" << std::endl;
-    //int before = active_clients.fetch_sub(1);
-    /*if (before <= 0)
-    {
-        log.write_log(log_location, "close_sock | Предупреждение: число активных клиентов стало меньше нуля");
-        active_clients.store(0); // аварийное восстановление
-    }*/
-    // Закрытие сокета
     close(client_socket);
+    emit clientDisconnected(QString::number(client_socket));
 
     // Дополнительно, если нужно записывать дату и время разрыва соединения
     std::time_t now = std::time(nullptr);
@@ -507,6 +510,7 @@ int communicator::send_file_list(int client_socket)
     {
         return 1;
     }
+    emit fileListSent(QString::number(client_socket), files.size());
     std::this_thread::sleep_for(duration);
 
     // Отправка каждого файла
@@ -522,6 +526,7 @@ int communicator::send_file_list(int client_socket)
 
     log.write_log(log_location, method_name + " | Все файлы успешно отправлены клиенту");
     std::cout << "[INFO] [" << method_name << "] Все файлы успешно отправлены клиенту" << std::endl;
+    return 0;
 }
 
 int communicator::send_file(int client_socket, std::string &file_path)
@@ -543,7 +548,6 @@ int communicator::send_file(int client_socket, std::string &file_path)
         {
             return 2;
         }
-        // close_sock(client_socket);
         return 2;
     }
 
@@ -556,7 +560,6 @@ int communicator::send_file(int client_socket, std::string &file_path)
         {
             return 2;
         }
-        // close_sock(client_socket);
         return 2;
     }
 
@@ -587,7 +590,6 @@ int communicator::send_file(int client_socket, std::string &file_path)
         {
             return 1;
         }
-        // std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
         total_bytes_sent += bytes_read;
         std::cout << "[INFO] [" << method_name << "] Отправлен блок #" << block_index++
@@ -605,6 +607,7 @@ int communicator::send_file(int client_socket, std::string &file_path)
     std::cout << "[INFO] [" << method_name << "] Файл успешно отправлен! Общий размер: "
               << total_bytes_sent << " байт" << std::endl;
     log.write_log(log_location, method_name + " | Файл успешно отправлен: " + file_path);
+    emit fileSent(QString::number(client_socket), QString::fromStdString(file_path));
     return 0;
 }
 
