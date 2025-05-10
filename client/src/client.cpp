@@ -13,6 +13,11 @@ void client::work(UI &intf)
 
     start();
     connect_to_server();
+    if(recv_data("Ошибка при приеме флага заполненности сервера")=="Сервер полон"){
+        close_sock();
+        std::cout << "[INFO] [" << method_name << "] Сервер полон" << std::endl;
+        exit(1);
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
     // Отправляем тип операции (регистрация / аутентификация)

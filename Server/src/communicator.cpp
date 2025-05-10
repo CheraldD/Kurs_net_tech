@@ -10,7 +10,7 @@ int communicator::connect_to_cl(int &new_socket, sockaddr_in &out_clientAddr)
         log.write_log(log_location, method_name + " | Ошибка при прослушивании порта");
         throw critical_error("Сервер не встал на прослушку");
     }
-    std::cout << "[INFO] [" << method_name << "] Ожидание подключения клиента"<< std::endl;
+    std::cout << "[INFO] [" << method_name << "] Ожидание подключения клиента" << std::endl;
     log.write_log(log_location, method_name + " | Ожидание подключения клиента...");
     addr_size = sizeof(out_clientAddr);
     new_socket = accept(serverSocket, (struct sockaddr *)&out_clientAddr, &addr_size);
@@ -26,16 +26,17 @@ int communicator::connect_to_cl(int &new_socket, sockaddr_in &out_clientAddr)
     inet_ntop(AF_INET, &(out_clientAddr.sin_addr), client_ip, INET_ADDRSTRLEN);
     int client_port = ntohs(out_clientAddr.sin_port);
     log.write_log(log_location, method_name + " | Подключен клиент | IP: " + std::string(client_ip) + " | Порт: " + std::to_string(client_port));
-    
+
     return 0;
 }
 
-int communicator::authentification(int client_socket,  std::string cl_id)
+int communicator::authentification(int client_socket, std::string cl_id)
 {
     const std::string method_name = "authentification";
 
     // Проверка валидности сокета
-    if (client_socket < 0) {
+    if (client_socket < 0)
+    {
         log.write_log(log_location, method_name + " | Некорректный сокет клиента");
         std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
         return 0;
@@ -47,7 +48,8 @@ int communicator::authentification(int client_socket,  std::string cl_id)
     // Получаем IP клиента
     sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
-    if (getpeername(client_socket, reinterpret_cast<struct sockaddr*>(&addr), &addr_len) < 0) {
+    if (getpeername(client_socket, reinterpret_cast<struct sockaddr *>(&addr), &addr_len) < 0)
+    {
         log.write_log(log_location, method_name + " | Не удалось получить IP клиента");
     }
     char client_ip[INET_ADDRSTRLEN] = "";
@@ -57,7 +59,8 @@ int communicator::authentification(int client_socket,  std::string cl_id)
     std::cout << "[INFO] [" << method_name << "] Аутентификация клиента [" << cl_id << "] с IP " << client_ip << std::endl;
 
     // Проверка существования пользователя
-    if (db.selectUserByName(cl_id) == 0) {
+    if (db.selectUserByName(cl_id) == 0)
+    {
         log.write_log(log_location, method_name + " | Клиент не найден в базе | ID: " + cl_id);
         send_data(client_socket, "UERR", cl_id, msg_id, "UERR");
         close_sock(client_socket);
@@ -73,7 +76,8 @@ int communicator::authentification(int client_socket,  std::string cl_id)
     std::string cl_ip_recv = recv_data(client_socket, "Ошибка при приеме IP");
 
     // Проверка пароля
-    if (cl_passw_base != cl_passw_recv) {
+    if (cl_passw_base != cl_passw_recv)
+    {
         log.write_log(log_location, method_name + " | Неверный пароль | ID: " + cl_id);
         std::cerr << "[WARN] [" << method_name << "] Неверный пароль клиента [" << cl_id << "]" << std::endl;
         send_data(client_socket, "PERR", cl_id, msg_id, "PERR");
@@ -82,9 +86,10 @@ int communicator::authentification(int client_socket,  std::string cl_id)
     }
 
     // Проверка IP-адреса
-    if (cl_ip_base != cl_ip_recv) {
-        log.write_log(log_location, method_name + " | Несовпадение IP-адреса | ID: " + cl_id + 
-                       " | Ожидалось: " + cl_ip_base + " | Получено: " + cl_ip_recv);
+    if (cl_ip_base != cl_ip_recv)
+    {
+        log.write_log(log_location, method_name + " | Несовпадение IP-адреса | ID: " + cl_id +
+                                        " | Ожидалось: " + cl_ip_base + " | Получено: " + cl_ip_recv);
         std::cerr << "[WARN] [" << method_name << "] IP клиента не совпадает с базой [" << cl_id << "]" << std::endl;
         send_data(client_socket, "IERR", cl_id, msg_id, "IERR");
         close_sock(client_socket);
@@ -99,12 +104,13 @@ int communicator::authentification(int client_socket,  std::string cl_id)
     return 1;
 }
 
-int communicator::registration(int client_socket,  std::string cl_id)
+int communicator::registration(int client_socket, std::string cl_id)
 {
     const std::string method_name = "registration";
 
     // Проверка валидности сокета
-    if (client_socket < 0) {
+    if (client_socket < 0)
+    {
         log.write_log(log_location, method_name + " | Некорректный сокет клиента");
         std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
         return 1;
@@ -116,7 +122,8 @@ int communicator::registration(int client_socket,  std::string cl_id)
     // Получаем IP клиента
     sockaddr_in addr;
     socklen_t addr_len = sizeof(addr);
-    if (getpeername(client_socket, reinterpret_cast<struct sockaddr*>(&addr), &addr_len) < 0) {
+    if (getpeername(client_socket, reinterpret_cast<struct sockaddr *>(&addr), &addr_len) < 0)
+    {
         log.write_log(log_location, method_name + " | Не удалось получить IP клиента");
     }
     char client_ip_cstr[INET_ADDRSTRLEN] = "";
@@ -128,7 +135,8 @@ int communicator::registration(int client_socket,  std::string cl_id)
 
     // Получаем пароль от клиента
     std::string password = recv_data(client_socket, "Ошибка при приеме пароля");
-    if (password.empty()) {
+    if (password.empty())
+    {
         log.write_log(log_location, method_name + " | Не получен пароль клиента | ID: " + cl_id + " | IP: " + client_ip_str);
         std::cerr << "[ERROR] [" << method_name << "] Не удалось получить пароль от клиента [" << cl_id << "]" << std::endl;
         close_sock(client_socket);
@@ -136,7 +144,8 @@ int communicator::registration(int client_socket,  std::string cl_id)
     }
 
     // Вставляем нового пользователя в базу данных
-    if(db.insertUser(cl_id, password, client_ip_str)==false){
+    if (db.insertUser(cl_id, password, client_ip_str) == false)
+    {
         send_data(client_socket, "REG_OK", cl_id, msg_id, "Ошибка регистрации");
         close_sock(client_socket);
         std::cout << "[INFO] [" << method_name << "] Регистрация клиента [" << cl_id << "] не завершена, ошибка при запросе к БД" << std::endl;
@@ -162,43 +171,48 @@ communicator::communicator(uint port, std::string log_loc)
 void communicator::work()
 {
     const std::string method_name = "work";
-
-    // Логируем начало работы сервера
     log.write_log(log_location, method_name + " | Запуск основного цикла сервера");
     std::cout << "[INFO] [" << method_name << "] Сервер запущен и ожидает подключения клиентов..." << std::endl;
 
-    // Инициализируем сервер
     start();
 
     while (true)
     {
         int new_socket;
-        // Ожидаем подключения клиента
         sockaddr_in client_addr;
         int result = connect_to_cl(new_socket, client_addr);
 
-        if (result == 0)
+        if (result != 0)
         {
-            // Логируем успешное подключение клиента и создание потока
-            log.write_log(log_location, method_name + " | Подключение клиента принято, создаётся поток для обработки");
-            std::cout << "[INFO] [" << method_name << "] Принято новое подключение. Запуск потока обработки клиента." << std::endl;
-
-            // Создаем новый поток для обработки клиента и сразу его отсоединяем (поток работает независимо)
-            std::thread client_thread(&communicator::handle_client, this, new_socket, client_addr);
-            client_thread.detach();
-        }
-        else
-        {
-            // Логируем ошибку при подключении клиента
             log.write_log(log_location, method_name + " | Ошибка при подключении клиента");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка подключения клиента, продолжаем ожидание..." << std::endl;
+            continue;
         }
+
+        // Проверяем, есть ли свободный слот
+        if (active_clients.load() >= 3)
+        {
+            send_data(new_socket, "CONN_ERR", "server", -1, "Сервер полон");
+            close_sock(new_socket);
+
+            log.write_log(log_location, method_name + " | Отклонено подключение: очередь заполнена");
+            std::cout << "[INFO] [" << method_name << "] Отклонено новое подключение: очередь заполнена." << std::endl;
+            continue;
+        }
+        send_data(new_socket, "CONN_OK", "server", -1, "Подключение успешно");
+        // Логируем успешное подключение клиента и создание потока
+        log.write_log(log_location, method_name + " | Подключение клиента принято, создаётся поток для обработки");
+        std::cout << "[INFO] [" << method_name << "] Принято новое подключение. Запуск потока обработки клиента." << std::endl;
+
+        // Создаем поток
+        std::thread client_thread(&communicator::handle_client, this, new_socket, client_addr);
+        client_thread.detach();
     }
 }
 void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
 {
     const std::string method_name = "handle_client";
-
+    active_clients.fetch_add(1);
     try
     {
         // Получаем ID клиента
@@ -222,7 +236,8 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
         if (operation_type == "0")
         {
             log.write_log(log_location, method_name + " | Регистрация нового клиента | ID: " + cl_id + " | IP: " + client_ip);
-            if(registration(client_socket, cl_id)==1){
+            if (registration(client_socket, cl_id) == 1)
+            {
                 return;
             }
             close_sock(client_socket);
@@ -242,16 +257,19 @@ void communicator::handle_client(int client_socket, sockaddr_in clientAddr)
 
         // Передача файлов
         log.write_log(log_location, method_name + " | Начата передача файлов | ID: " + cl_id + " | IP: " + client_ip);
-        if(file_exchange(client_socket)==1){
+        if (file_exchange(client_socket) == 1)
+        {
             close_sock(client_socket);
             return;
         }
+        active_clients.fetch_sub(1);
     }
     catch (const std::exception &e)
     {
         // Логируем и выводим ошибку при исключении
         log.write_log(log_location, method_name + " | Критическая ошибка обработки клиента: " + std::string(e.what()));
         std::cerr << "[ERROR] [" << method_name << "] Исключение при обработке клиента: " << e.what() << std::endl;
+
         close_sock(client_socket);
     }
 }
@@ -299,7 +317,8 @@ int communicator::file_exchange(int client_socket)
     std::cout << "[INFO] [" << method_name << "] Начало обмена файлами с клиентом (ID: " << client_socket << ")" << std::endl;
 
     // Отправка списка файлов клиенту
-    if(send_file_list(client_socket)==1){
+    if (send_file_list(client_socket) == 1)
+    {
         return 1;
     }
 
@@ -314,34 +333,34 @@ int communicator::file_exchange(int client_socket)
         {
             log.write_log(log_location, method_name + " | Ошибка при приеме имени файла от клиента или клиент закрыл соединение (ID: " + std::to_string(client_socket) + ")");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка при приеме имени файла от клиента/клиент закрыл соединение (ID: " << client_socket << ")" << std::endl;
-            //close_sock(client_socket);
+            // close_sock(client_socket);
             return 1;
         }
 
         // Логируем полученный путь к файлу
         log.write_log(log_location, method_name + " | Получен путь к файлу от клиента (ID: " + std::to_string(client_socket) + "): " + path);
         std::cout << "[INFO] [" << method_name << "] Получен путь к файлу от клиента (ID: " << client_socket << "): " << path << std::endl;
-        int file_send=send_file(client_socket, path);
+        int file_send = send_file(client_socket, path);
         // Отправка запрашиваемого файла клиенту
         if (file_send == 1)
         {
             log.write_log(log_location, method_name + " | Ошибка при отправке файла клиенту (ID: " + std::to_string(client_socket) + ")");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка при отправке файла клиенту (ID: " << client_socket << ")" << std::endl;
-            //close_sock(client_socket);
+            // close_sock(client_socket);
             return 1;
         }
         if (file_send == 2)
         {
             log.write_log(log_location, method_name + " | Ошибка при отправке файла клиенту. Не удалось открыть файл или файл не найден (ID: " + std::to_string(client_socket) + ")");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка при отправке файла клиенту. Не удалось открыть файл или файл не найден (ID: " << client_socket << ")" << std::endl;
-            //close_sock(client_socket);
+            // close_sock(client_socket);
             continue;
         }
     }
 
     return 0;
 }
-std::string communicator::recv_data(int client_socket,  std::string error_msg)
+std::string communicator::recv_data(int client_socket, std::string error_msg)
 {
     const std::string method_name = "recv_data";
 
@@ -361,25 +380,29 @@ std::string communicator::recv_data(int client_socket,  std::string error_msg)
         return "";
     }
 
-    try {
+    try
+    {
         std::string raw_data(buffer.data(), received_bytes);
         log.write_log(log_location, method_name + " | Принято протокольное сообщение от клиента (ID: " + std::to_string(client_socket) + "): " + raw_data);
         MessageProtocol::ParsedMessage message = MessageProtocol::parse(raw_data);
         std::cout << "[INFO] [" << method_name << "] Принято сообщение: " << message.message << std::endl;
-        return message.message;  // Возвращаем только полезную нагрузку
-    } catch (const std::exception& e) {
+        return message.message; // Возвращаем только полезную нагрузку
+    }
+    catch (const std::exception &e)
+    {
         log.write_log(log_location, method_name + " | Ошибка парсинга протокольного сообщения: " + std::string(e.what()));
         std::cerr << "[ERROR] [" << method_name << "] Ошибка парсинга: " << e.what() << std::endl;
         return "";
     }
 }
-int communicator::send_data(int client_socket, const std::string& header,
-                             const std::string& client_id, int message_id,
-                             const std::string& msg)
+int communicator::send_data(int client_socket, const std::string &header,
+                            const std::string &client_id, int message_id,
+                            const std::string &msg)
 {
     const std::string method_name = "send_data";
 
-    if (client_socket < 0) {
+    if (client_socket < 0)
+    {
         log.write_log(log_location, method_name + " | Некорректный сокет клиента");
         std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
         return 1;
@@ -397,14 +420,16 @@ int communicator::send_data(int client_socket, const std::string& header,
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     // отправляем пакет LENGTH целиком
     size_t sent = 0;
-    const char* len_data = len_packet.data();
+    const char *len_data = len_packet.data();
     size_t len_size = len_packet.size();
-    while (sent < len_size) {
+    while (sent < len_size)
+    {
         int n = send(client_socket, len_data + sent, len_size - sent, MSG_NOSIGNAL);
-        if (n <= 0) {
+        if (n <= 0)
+        {
             log.write_log(log_location, method_name + " | Ошибка отправки LENGTH" + std::to_string(sent) + " байт");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки LENGTH, n=" << n << std::endl;
-            //close_sock(client_socket);
+            // close_sock(client_socket);
             return 1;
         }
         sent += n;
@@ -414,14 +439,16 @@ int communicator::send_data(int client_socket, const std::string& header,
 
     // 3) отправляем основной пакет целиком
     sent = 0;
-    const char* data = packet.data();
+    const char *data = packet.data();
     size_t packet_size = packet.size();
-    while (sent < packet_size) {
+    while (sent < packet_size)
+    {
         int n = send(client_socket, data + sent, packet_size - sent, MSG_NOSIGNAL);
-        if (n <= 0) {
+        if (n <= 0)
+        {
             log.write_log(log_location, method_name + " | Ошибка отправки DATA после " + std::to_string(sent) + " байт");
             std::cerr << "[ERROR] [" << method_name << "] Ошибка отправки DATA, n=" << n << std::endl;
-            //close_sock(client_socket);
+            // close_sock(client_socket);
             return 1;
         }
         sent += n;
@@ -438,7 +465,12 @@ void communicator::close_sock(int client_socket)
     // Логируем разрыв соединения
     log.write_log(log_location, method_name + " | Разорвано соединение с клиентом (ID: " + std::to_string(client_socket) + ")");
     std::cout << "[INFO] [" << method_name << "] Разорвано соединение с клиентом (ID: " << client_socket << ")" << std::endl;
-
+    int before = active_clients.fetch_sub(1);
+    if (before <= 0)
+    {
+        log.write_log(log_location, "close_sock | Предупреждение: число активных клиентов стало меньше нуля");
+        active_clients.store(0); // аварийное восстановление
+    }
     // Закрытие сокета
     close(client_socket);
 
@@ -456,7 +488,8 @@ int communicator::send_file_list(int client_socket)
     data_handler handler;
     std::vector<std::string> files = handler.get_file_list();
 
-    if (files.empty()) {
+    if (files.empty())
+    {
         log.write_log(log_location, method_name + " | Список файлов пуст");
         std::cerr << "[WARN] [" << method_name << "] Список файлов пуст" << std::endl;
         return 1;
@@ -465,15 +498,18 @@ int communicator::send_file_list(int client_socket)
     int msg_id = MessageProtocol::generateMessageID();
 
     // Отправляем количество файлов
-    if(send_data(client_socket, "FILE_COUNT", "server", msg_id, std::to_string(files.size()))==1){
+    if (send_data(client_socket, "FILE_COUNT", "server", msg_id, std::to_string(files.size())) == 1)
+    {
         return 1;
     }
     std::this_thread::sleep_for(duration);
 
     // Отправка каждого файла
-    for (const auto& file : files) {
+    for (const auto &file : files)
+    {
         msg_id = MessageProtocol::generateMessageID();
-        if(send_data(client_socket, "FILE_ENTRY", "server", msg_id, file)==1){
+        if (send_data(client_socket, "FILE_ENTRY", "server", msg_id, file) == 1)
+        {
             return 1;
         }
         std::this_thread::sleep_for(duration);
@@ -483,41 +519,47 @@ int communicator::send_file_list(int client_socket)
     std::cout << "[INFO] [" << method_name << "] Все файлы успешно отправлены клиенту" << std::endl;
 }
 
-int communicator::send_file(int client_socket, std::string& file_path)
+int communicator::send_file(int client_socket, std::string &file_path)
 {
     const std::string method_name = "send_file";
     int msg_id = MessageProtocol::generateMessageID();
-    if (client_socket < 0) {
+    if (client_socket < 0)
+    {
         log.write_log(log_location, method_name + " | Некорректный сокет клиента");
         std::cerr << "[ERROR] [" << method_name << "] Некорректный сокет клиента" << std::endl;
         return 1;
     }
 
-    if (!boost::filesystem::exists(file_path)) {
+    if (!boost::filesystem::exists(file_path))
+    {
         log.write_log(log_location, method_name + " | Файл не найден: " + file_path);
         std::cerr << "[ERROR] [" << method_name << "] Файл не найден: " << file_path << std::endl;
-        if(send_data(client_socket, "FILE_ERR", "server", msg_id, "Файл не найден")==1){
+        if (send_data(client_socket, "FILE_ERR", "server", msg_id, "Файл не найден") == 1)
+        {
             return 2;
         }
-        //close_sock(client_socket);
+        // close_sock(client_socket);
         return 2;
     }
 
     std::ifstream file(file_path, std::ios::binary | std::ios::ate);
-    if (!file) {
+    if (!file)
+    {
         log.write_log(log_location, method_name + " | Ошибка открытия файла: " + file_path);
         std::cerr << "[ERROR] [" << method_name << "] Ошибка открытия файла: " << file_path << std::endl;
-        if(send_data(client_socket, "FILE_ERR", "server", msg_id, "Ошибка открытия файла")==1){
+        if (send_data(client_socket, "FILE_ERR", "server", msg_id, "Ошибка открытия файла") == 1)
+        {
             return 2;
         }
-       // close_sock(client_socket);
+        // close_sock(client_socket);
         return 2;
     }
 
     std::streamsize file_size = file.tellg();
     file.seekg(0, std::ios::beg);
 
-    if(send_data(client_socket, "FILE_SIZE", "server", msg_id, std::to_string(file_size))==1){
+    if (send_data(client_socket, "FILE_SIZE", "server", msg_id, std::to_string(file_size)) == 1)
+    {
         return 1;
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -527,7 +569,8 @@ int communicator::send_file(int client_socket, std::string& file_path)
     int total_bytes_sent = 0;
     int block_index = 0;
 
-    while (file) {
+    while (file)
+    {
         file.read(buffer.data(), BUFFER_SIZE);
         std::streamsize bytes_read = file.gcount();
         if (bytes_read <= 0)
@@ -535,10 +578,11 @@ int communicator::send_file(int client_socket, std::string& file_path)
 
         std::string data_chunk(buffer.data(), bytes_read);
         msg_id = MessageProtocol::generateMessageID();
-        if(send_data(client_socket, "FILE_CHUNK", "server", msg_id, data_chunk)==1){
+        if (send_data(client_socket, "FILE_CHUNK", "server", msg_id, data_chunk) == 1)
+        {
             return 1;
         }
-        //std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        // std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
         total_bytes_sent += bytes_read;
         std::cout << "[INFO] [" << method_name << "] Отправлен блок #" << block_index++
@@ -548,7 +592,8 @@ int communicator::send_file(int client_socket, std::string& file_path)
     file.close();
 
     msg_id = MessageProtocol::generateMessageID();
-    if(send_data(client_socket, "FILE_END", "server", msg_id, "EOF")==1){
+    if (send_data(client_socket, "FILE_END", "server", msg_id, "EOF") == 1)
+    {
         return 1;
     }
 

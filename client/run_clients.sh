@@ -13,7 +13,7 @@ USERNAME="new"
 PASSWORD="new"
 
 # Количество клиентов
-NUM_CLIENTS=10
+NUM_CLIENTS=4
 
 for ((i=1; i<=NUM_CLIENTS; i++)); do
     echo "[INFO] Запуск клиента #$i в новом окне konsole"

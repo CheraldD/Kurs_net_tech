@@ -11,7 +11,7 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <netinet/in.h>
-
+#include <atomic>
 #include <random>
 #include <chrono>
 #include <thread>
@@ -45,7 +45,7 @@ public:
     logger log;
     std::string cl_id, log_location;
     timeval timeout{};
-
+    std::atomic<int> active_clients{0};
     communicator(uint port,std::string log_loc);
     
     int connect_to_cl(int &new_socket, sockaddr_in &out_clientAddr);
