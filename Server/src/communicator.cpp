@@ -364,7 +364,7 @@ int communicator::file_exchange(int client_socket)
             std::cerr << "[ERROR] [" << method_name << "] Ошибка при отправке файла клиенту. Не удалось открыть файл или файл не найден (ID: " << client_socket << ")" << std::endl;
             continue;
         }
-        emit fileSent(QString::number(client_socket), QString::fromStdString(path));
+        //emit fileSent(QString::number(client_socket), QString::fromStdString(path));
     }
 
     return 0;
@@ -397,7 +397,7 @@ std::string communicator::recv_data(int client_socket, std::string error_msg)
         log.write_log(log_location, method_name + " | Принято протокольное сообщение от клиента (ID: " + std::to_string(client_socket) + "): " + raw_data);
         MessageProtocol::ParsedMessage message = MessageProtocol::parse(raw_data);
         std::cout << "[INFO] [" << method_name << "] Принято сообщение: " << message.message << std::endl;
-       // emit messageReceived(QString::number(client_socket), QString::fromStdString(message.message));
+        emit messageReceived(QString::number(client_socket), QString::fromStdString(message.message));
         return message.message; // Возвращаем только полезную нагрузку
     }
     catch (const std::exception &e)
@@ -629,4 +629,7 @@ std::string communicator::hash_gen(std::string &password)
 
     // Возвращаем хэшированную строку пароля
     return hashed_password;
+}
+void communicator::stop(){
+    exit(1);
 }

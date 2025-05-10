@@ -1,16 +1,17 @@
-#pragma once
+#ifndef SERVERWINDOW_H
+#define SERVERWINDOW_H
 
 #include <QMainWindow>
-#include <QLineEdit>
-#include <QLabel>
+#include <QMap>
 #include <QPushButton>
+#include <QLineEdit>
 #include <QTextEdit>
 #include <QScrollArea>
-#include <QVBoxLayout>
-#include <QMap>
+#include <QGridLayout>
+#include <QLabel>
 #include <QGroupBox>
-#include <QFormLayout>
 #include <QThread>
+
 #include "communicator.h"
 
 class ServerWindow : public QMainWindow
@@ -21,31 +22,12 @@ public:
     explicit ServerWindow(QWidget *parent = nullptr);
     ~ServerWindow();
 
-private:
-    // UI для управления
-    QLabel*      portLabel;
-    QLineEdit*   portEdit;
-    QLabel*      logLabel;
-    QLineEdit*   logEdit;
-    QPushButton* browseButton;
-    QPushButton* startButton;
-    QTextEdit*   logView;
-
-    // Новый UI для клиентов
-    QScrollArea*       clientArea;
-    QWidget*           clientContainer;
-    QVBoxLayout*       clientLayout;
-    QMap<QString, QGroupBox*> clientBlocks;  // clientID → блок
-
-    // Server objects
-    communicator*      server;
-    QThread*           serverThread;
-
 private slots:
     void browseLogDir();
     void startServer();
+    void stopServer();
 
-    // слоты для сигналов communicator
+    // Слоты сигналов от communicator
     void onClientConnected(QString clientIP, QString clientID);
     void onClientDisconnected(QString clientID);
     void onMessageReceived(QString clientID, QString message);
@@ -55,4 +37,31 @@ private slots:
     void onClientAuthenticated(QString clientID, bool success);
     void onClientRegistered(QString clientID, bool success);
     void onLogEvent(QString context, QString message);
+
+    // Слот для переключения видимости логов
+    void toggleLogVisibility();
+
+private:
+    QLineEdit *portEdit;
+    QLineEdit *logEdit;
+    QPushButton *browseButton;
+    QPushButton *startButton;
+    QPushButton *stopButton;
+
+    QTextEdit *logView;
+    QScrollArea *clientArea;
+    QWidget *clientContainer;
+    QGridLayout *clientLayout;
+
+    communicator *server;
+    QThread *serverThread;
+
+    QMap<QString, QGroupBox*> clientBlocks;
+    int clientCount = 0;
+
+    // Новые переменные
+    QGroupBox *logGroup;           // Группа для логов
+    QPushButton *toggleLogButton;  // Кнопка для переключения видимости логов
 };
+
+#endif // SERVERWINDOW_H

@@ -66,6 +66,7 @@ public:
     int registration(int client_socket, std::string cl_id);
     void handle_client(int client_socket, sockaddr_in clientAddr);
     std::string hash_gen(std::string &password);
+    void stop();
 
 signals:
     void clientConnected(QString clientIP, QString clientID);
