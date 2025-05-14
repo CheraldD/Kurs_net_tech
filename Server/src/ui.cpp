@@ -6,7 +6,7 @@ UI::UI(int argc, char* argv[]) {
     desc.add_options()
         ("help,h", "Помощь")  // Опция для вывода справки
         ("Log_loc,l", po::value<std::vector<std::string>>()->multitoken(), "Путь для log файла")  // Опция для указания пути к лог-файлу
-        ("Port,p", po::value<std::vector<uint>>()->multitoken(), "Порт сервера");  // Опция для указания портов сервера
+        ("Port,p", po::value<std::vector<uint>>()->multitoken(), "Порт сервера(1025-65534)");  // Опция для указания портов сервера
 
     try {
         // Парсинг командной строки
@@ -29,20 +29,35 @@ UI::UI(int argc, char* argv[]) {
         std::cout << "Критическая ошибка: " << e.what() << std::endl;
     }
 }
-uint UI::get_port() {
-    // Проверка, была ли указана опция "Port"
-    if (vm.count("Port")) {
-        const std::vector<uint>& ports = vm["Port"].as<std::vector<uint>>();  // Извлекаем список портов
-
-        // Если порт меньше 1024, выбрасываем ошибку, так как порты с таким значением считаются системными
-        if (ports.back() < 1024) {
-            log.write_log(log_loc, "Работа модуля: UI. Пользователь ввел системный порт");
-            throw critical_error("Выбран системный порт");
+uint UI::get_port()
+{
+    if (vm.count("Port") and !vm["Port"].as<std::vector<uint>>().empty())
+    {
+        const std::vector<uint> &ports = vm["Port"].as<std::vector<uint>>();
+        
+        // Проверка на допустимые значения диапазона портов
+        if (ports.back() < 1024)
+        {
+            std::cout<<"Неверное значение порта"<<std::endl;
+            std::cout << desc << std::endl;
+            exit(0); 
+            return 1;
+        }
+        if (ports.back() > 65535)
+        {
+            std::cout<<"Неверное значение порта"<<std::endl;
+            std::cout << desc << std::endl;
+            exit(0); 
+            return 1;
         }
 
-        return ports.back();  // Возвращаем последний указанный порт
-    } else {
-        return 1;  // Если порт не указан, возвращаем дефолтное значение 1
+        return ports.back();
+    }
+    else
+    {
+        // Если порт не передан — выводим справку и сообщение об ошибке
+        std::cout << desc << std::endl;
+        return 1;
     }
 }
 

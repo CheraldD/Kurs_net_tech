@@ -68,6 +68,7 @@
         "typeinfo": "cpp",
         "variant": "cpp",
         "codecvt": "cpp",
-        "future": "cpp"
+        "future": "cpp",
+        "qfileinfo": "cpp"
     }
 }

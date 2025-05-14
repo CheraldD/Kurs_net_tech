@@ -1,3 +1,3 @@
 *.o
-server
+build
 war.txt

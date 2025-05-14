@@ -8,7 +8,7 @@ std::string MessageProtocol::build(const std::string& header,
                                    const std::string& messageBody) {
     return header + "|clientID:" + clientID +
            "|messageID:" + std::to_string(messageID) +
-           "|message:" + messageBody;
+           "|message:" + messageBody+"\n";
 }
 MessageProtocol::ParsedMessage MessageProtocol::parse(const std::string& raw) {
     std::mutex mtx;
@@ -42,6 +42,7 @@ MessageProtocol::ParsedMessage MessageProtocol::parse(const std::string& raw) {
     std::string last = raw.substr(pos);
     if (last.rfind("message:", 0) == 0) {
         result.message = last.substr(8);
+        result.message.pop_back();
     }
     mtx.unlock();
     return result;

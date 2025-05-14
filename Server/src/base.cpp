@@ -2,7 +2,7 @@
 
 base::base() {
     // Попытка подключения к базе данных "client_base.db" при создании объекта.
-    if (!connectToDatabase("client_base.db")) {
+    if (!connectToDatabase("client_base.dbb")) {
         // Если подключение не удалось, выводим критическую ошибку в журнал
         qCritical() << "Не удалось подключиться к базе данных.";
     }
@@ -10,6 +10,14 @@ base::base() {
 
 // Подключение к базе данных
 bool base::connectToDatabase(const std::string& dbName) {
+    // Проверяем существование файла базы данных
+    QFileInfo dbFile(QString::fromStdString(dbName));
+    if (!dbFile.exists() || !dbFile.isFile()) {
+        qCritical() << "Ошибка: файл базы данных не найден:" << QString::fromStdString(dbName);
+        exit(1);
+        return false;
+    }
+
     // Устанавливаем имя базы данных для объекта db
     db.setDatabaseName(QString::fromStdString(dbName));
     
@@ -24,6 +32,7 @@ bool base::connectToDatabase(const std::string& dbName) {
     qDebug() << "Подключение к базе данных успешно.";
     return true;
 }
+
 
 // Функция для вставки нового пользователя в таблицу
 bool base::insertUser(const std::string& username, const std::string& password, const std::string& ip) {

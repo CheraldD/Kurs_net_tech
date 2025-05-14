@@ -9,7 +9,9 @@
 #include <QSqlQuery>
 #include <QSqlError>
 #include <QDebug>
-
+#include <QFileInfo>
+#include <QString>
+#include <QDebug>
 class base {
 private:
     QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
