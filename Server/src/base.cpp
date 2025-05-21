@@ -2,7 +2,7 @@
 
 base::base() {
     // Попытка подключения к базе данных "client_base.db" при создании объекта.
-    if (!connectToDatabase("client_base.dbb")) {
+    if (!connectToDatabase("client_base.db")) {
         // Если подключение не удалось, выводим критическую ошибку в журнал
         qCritical() << "Не удалось подключиться к базе данных.";
     }
