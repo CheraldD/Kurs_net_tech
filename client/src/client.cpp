@@ -1,4 +1,6 @@
 #include "client.h"
+#include <sys/ioctl.h>
+#include <net/if.h>
 void client::work(UI &intf)
 {
     const std::string method_name = "client::work";
@@ -194,7 +196,16 @@ void client::connect_to_server()
     }
     else
     {
-        ip = inet_ntoa(localAddr.sin_addr); // Получаем сетевой IP
+	struct ifreq ifr;
+	strncpy(ifr.ifr_name,"enp4s0",IFNAMSIZ-1);
+	if(ioctl(sock,SIOCGIFADDR,&ifr)==-1){
+		perror("ioctl");
+		close(sock);
+		return;
+	}
+	char ipp[INET_ADDRSTRLEN];
+	inet_ntop(AF_INET,&((struct sockaddr_in*)&ifr.ifr_addr)->sin_addr,ipp,sizeof(ipp));
+	ip=ipp;
         std::cout << "[INFO] [" << method_name << "] Сервер не локальный. Используется IP: " << ip << std::endl;
     }
 
